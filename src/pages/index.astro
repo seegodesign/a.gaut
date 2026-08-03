@@ -23,6 +23,31 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
   ...entry,
   image: getOptimizedUploadPath(entry.image),
 }))
+const instagramUrl = settings.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'
+const subhead = settings.subhead?.trim() || 'places spaces & things'
+const introStartDelay = 180
+const introCharacterDelay = 55
+const introCharacterDuration = 480
+const introPhotoPause = 140
+
+// Astro renders the animated characters into the initial HTML. Words remain
+// intact, while the index preserves a natural timing pause between them.
+let subheadCharacterIndex = 0
+const rawSubheadWords = subhead.split(/\s+/)
+const subheadWords = rawSubheadWords.map((word, wordIndex) => {
+  const characters = Array.from(word).map((character) => {
+    const index = subheadCharacterIndex
+    subheadCharacterIndex += 1
+    return { character, index }
+  })
+
+  if (wordIndex < rawSubheadWords.length - 1) subheadCharacterIndex += 1
+  return { characters }
+})
+const introDuration = introStartDelay
+  + Math.max(0, Array.from(subhead).length - 1) * introCharacterDelay
+  + introCharacterDuration
+  + introPhotoPause
 ---
 
 <!doctype html>
@@ -50,17 +75,59 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
     <ClientRouter />
   </head>
   <body>
-    <!--
-      Astro renders this page shell. The client:only directive tells Astro that
-      the interactive React and WebGL gallery must run entirely in the browser.
-    -->
-    <App
-      images={optimizedGalleryImages}
-      siteTitle={settings.siteTitle}
-      subhead={settings.subhead}
-      instagramUrl={settings.instagramUrl}
-      randomizePhotoOrder={settings.randomizePhotoOrder}
-      client:only="react"
-    />
+    <main class="studio-shell">
+      <div class="studio-noise" aria-hidden="true"></div>
+
+      <!-- React updates only this title's preload mask; the H1 is static HTML. -->
+      <h1 class="brand-signature" data-title={siteTitle}>{siteTitle}</h1>
+
+      <nav class="header-links" aria-label="Contact and social links">
+        <a class="contact-link" href="/contact">Contact</a>
+        <a
+          class="instagram-link"
+          href={instagramUrl}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Visit Adrian Gaut on Instagram"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+            <circle cx="12" cy="12" r="4.25"></circle>
+            <circle class="instagram-dot" cx="17.4" cy="6.7" r="1"></circle>
+          </svg>
+        </a>
+      </nav>
+
+      <div class="subhead-wrap">
+        <p class="subhead" aria-label={subhead}>
+          {subheadWords.map((word, wordIndex) => (
+            <>
+              <span class="subhead-word" aria-hidden="true">
+                {word.characters.map(({ character, index }) => (
+                  <span
+                    class="subhead-character"
+                    style={`animation-delay: ${introStartDelay + index * introCharacterDelay}ms; animation-duration: ${introCharacterDuration}ms;`}
+                  >
+                    {character}
+                  </span>
+                ))}
+              </span>
+              {wordIndex < subheadWords.length - 1 && ' '}
+            </>
+          ))}
+        </p>
+      </div>
+
+      <!-- Only the WebGL gallery and interactions require client-side React. -->
+      <App
+        images={optimizedGalleryImages}
+        introDuration={introDuration}
+        randomizePhotoOrder={settings.randomizePhotoOrder}
+        enablePhotoFloating={settings.enablePhotoFloating !== false}
+        enableDepthOfField={settings.enableDepthOfField !== false}
+        enableScrollMotionBlur={settings.enableScrollMotionBlur !== false}
+        client:only="react"
+      />
+    </main>
   </body>
 </html>

@@ -51,6 +51,24 @@ collections:
             default: false
             required: false
             hint: Ignore the curated gallery order and shuffle the photos whenever the site loads.
+          - name: enablePhotoFloating
+            label: Floating Photo Effect
+            widget: boolean
+            default: true
+            required: false
+            hint: Let photos drift gently and lift on hover. Turn this off to keep them still.
+          - name: enableDepthOfField
+            label: Depth of Field Effect
+            widget: boolean
+            default: true
+            required: false
+            hint: Blur out-of-focus photos on larger screens. Turn this off to remove depth blur.
+          - name: enableScrollMotionBlur
+            label: Scroll Motion Blur
+            widget: boolean
+            default: true
+            required: false
+            hint: Soften photos slightly during fast scrolling to make their movement feel smoother.
           - name: socialImage
             label: Social Share Image
             widget: image

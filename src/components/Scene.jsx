@@ -22,10 +22,6 @@ const DEFAULT_FOCUS_RANGE = 8
 const SELECTED_FOCUS_RANGE = 1.35
 const BACKDROP_OPACITY = 0.9
 const BACKDROP_GAP = 0.08
-const INTRO_START_DELAY_MS = 180
-const INTRO_CHARACTER_DELAY_MS = 55
-const INTRO_CHARACTER_DURATION_MS = 480
-const INTRO_PHOTO_PAUSE_MS = 140
 // Begin downloading photographs just outside the camera view. This gives the
 // browser time to decode the next few images without requesting the whole CMS
 // library when the page first opens.
@@ -56,31 +52,6 @@ function shuffleImages(images) {
   }
 
   return shuffled
-}
-
-// Split the subhead into non-breaking words while retaining one continuous
-// character index for the staggered intro timing.
-function createSubheadTokens(text) {
-  let characterIndex = 0
-
-  return text.split(/(\s+)/).filter(Boolean).map((segment, tokenIndex) => {
-    if (/^\s+$/.test(segment)) {
-      characterIndex += Array.from(segment).length
-      return {
-        key: `space-${tokenIndex}`,
-        type: 'space',
-        value: segment.replaceAll(' ', '\u00a0'),
-      }
-    }
-
-    const characters = Array.from(segment).map((character) => {
-      const index = characterIndex
-      characterIndex += 1
-      return { character, index }
-    })
-
-    return { characters, key: `word-${tokenIndex}`, type: 'word' }
-  })
 }
 
 // Follow the visitor's operating-system accessibility preference and update
@@ -181,7 +152,11 @@ function GalleryPlanes({
   onFocusPlane,
   focusPointRef,
   reducedMotion,
+  enablePhotoFloating,
+  enableScrollMotionBlur,
   photosCanReveal,
+  motionRef,
+  onPreloadProgress,
 }) {
   const gl = useThree((state) => state.gl)
   // Astro reads this list from the CMS-managed gallery.json file.
@@ -194,7 +169,9 @@ function GalleryPlanes({
   const meshRefs = useRef(new Map())
   const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
+  const initialPreloadRef = useRef(null)
   const textureLoader = useMemo(() => new THREE.TextureLoader(), [])
+  const scrollBlurUniform = useMemo(() => new THREE.Uniform(0), [])
   // These mutable collections track network requests without re-rendering the
   // full gallery whenever an individual photograph finishes loading.
   const textureState = useMemo(() => ({
@@ -217,16 +194,44 @@ function GalleryPlanes({
   // Start loaded photographs transparent, but keep depth writing enabled so
   // overlapping 3D planes do not blend through one another like glass.
   const materials = useMemo(
-    () => images.map(() => new THREE.MeshBasicMaterial({
-      color: '#ffffff',
-      depthWrite: true,
-      opacity: 0,
-      side: THREE.FrontSide,
-      toneMapped: false,
-      transparent: true,
-      visible: false,
-    })),
-    [images],
+    () => images.map(() => {
+      const material = new THREE.MeshBasicMaterial({
+        color: '#ffffff',
+        depthWrite: true,
+        opacity: 0,
+        side: THREE.FrontSide,
+        toneMapped: false,
+        transparent: true,
+        visible: false,
+      })
+
+      if (enableScrollMotionBlur) {
+        // Blur samples remain inside this photo's texture. Clamping the UVs keeps
+        // photo edges solid and prevents the white page from entering the blur.
+        material.onBeforeCompile = (shader) => {
+          shader.uniforms.scrollImageBlur = scrollBlurUniform
+          shader.fragmentShader = `uniform float scrollImageBlur;\n${shader.fragmentShader}`.replace(
+            '#include <map_fragment>',
+            `#ifdef USE_MAP
+              vec2 imageBlurStep = vec2(scrollImageBlur, 0.0);
+              vec4 sampledDiffuseColor = texture2D(map, vMapUv) * 0.40;
+              sampledDiffuseColor += texture2D(map, clamp(vMapUv - imageBlurStep, vec2(0.001), vec2(0.999))) * 0.22;
+              sampledDiffuseColor += texture2D(map, clamp(vMapUv + imageBlurStep, vec2(0.001), vec2(0.999))) * 0.22;
+              sampledDiffuseColor += texture2D(map, clamp(vMapUv - imageBlurStep * 2.0, vec2(0.001), vec2(0.999))) * 0.08;
+              sampledDiffuseColor += texture2D(map, clamp(vMapUv + imageBlurStep * 2.0, vec2(0.001), vec2(0.999))) * 0.08;
+              #ifdef DECODE_VIDEO_TEXTURE
+                sampledDiffuseColor = sRGBTransferEOTF(sampledDiffuseColor);
+              #endif
+              diffuseColor *= sampledDiffuseColor;
+            #endif`,
+          )
+        }
+        material.customProgramCacheKey = () => 'gallery-texture-motion-blur-v1'
+      }
+
+      return material
+    }),
+    [enableScrollMotionBlur, images, scrollBlurUniform],
   )
   const backdropMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#000000',
@@ -237,10 +242,26 @@ function GalleryPlanes({
     toneMapped: false,
   }), [])
 
+  const reportPreloadProgress = useCallback(() => {
+    const plannedTextures = initialPreloadRef.current
+    if (!plannedTextures) return
+
+    const finishedTextures = [...plannedTextures].filter((textureIndex) => (
+      textureState.loaded.has(textureIndex) || textureState.failed.has(textureIndex)
+    )).length
+    const progress = plannedTextures.size > 0
+      ? finishedTextures / plannedTextures.size
+      : 1
+
+    onPreloadProgress(progress)
+  }, [onPreloadProgress, textureState])
+
   useEffect(() => {
     // React may replay effects during development; mark this resource group as
     // active each time the setup runs so lazy requests continue after replay.
     textureState.disposed = false
+    initialPreloadRef.current = null
+    onPreloadProgress(0)
 
     // React runs this cleanup when the gallery is removed. Disposing GPU
     // resources prevents memory leaks during development and navigation.
@@ -251,7 +272,7 @@ function GalleryPlanes({
       materials.forEach((material) => material.dispose())
       backdropMaterial.dispose()
     }
-  }, [backdropMaterial, geometry, materials, textureState])
+  }, [backdropMaterial, geometry, materials, onPreloadProgress, textureState])
 
   const requestTexture = useCallback((textureIndex) => {
     if (
@@ -284,15 +305,17 @@ function GalleryPlanes({
         material.map = texture
         material.visible = true
         material.needsUpdate = true
+        reportPreloadProgress()
       },
       undefined,
       () => {
         // Do not retry a missing or invalid CMS image on every animation frame.
         textureState.loading.delete(textureIndex)
         textureState.failed.add(textureIndex)
+        reportPreloadProgress()
       },
     )
-  }, [gl, materials, textureLoader, textureState, textureUrls])
+  }, [gl, materials, reportPreloadProgress, textureLoader, textureState, textureUrls])
 
   useEffect(() => () => {
     document.body.style.cursor = ''
@@ -305,12 +328,36 @@ function GalleryPlanes({
 
   // useFrame runs once for every rendered animation frame.
   useFrame(({ camera, clock }, delta) => {
+    // A symmetric horizontal lens blur feels softer than a trailing echo. It is
+    // applied inside each photo, so HTML text and transparent canvas edges stay crisp.
+    const blurTarget = !enableScrollMotionBlur
+      || reducedMotion
+      || Math.abs(motionRef.current.velocity) < 0.08
+      ? 0
+      : THREE.MathUtils.clamp(Math.abs(motionRef.current.velocity) * 0.004, 0, 0.015)
+    const blurDamping = blurTarget > scrollBlurUniform.value ? 12 : 6
+    scrollBlurUniform.value = THREE.MathUtils.damp(
+      scrollBlurUniform.value,
+      blurTarget,
+      blurDamping,
+      delta,
+    )
+
     // Work out how wide the view is at the deepest lane, then preload a small
     // strip on either side. All three loop copies share the same texture.
     const halfViewportWidth = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
       * (camera.position.z - DEEPEST_LANE_Z)
       * camera.aspect
     const loadDistance = halfViewportWidth + TEXTURE_PRELOAD_MARGIN
+
+    if (initialPreloadRef.current === null) {
+      initialPreloadRef.current = new Set(
+        instances
+          .filter((instance) => Math.abs(instance.baseX - camera.position.x) <= loadDistance)
+          .map((instance) => instance.textureIndex),
+      )
+      reportPreloadProgress()
+    }
 
     instances.forEach((instance) => {
       if (Math.abs(instance.baseX - camera.position.x) <= loadDistance) {
@@ -334,9 +381,11 @@ function GalleryPlanes({
       }
     })
 
-    // Ambient floating needs continuous frames. Reduced-motion mode can stop
-    // rendering once every mesh has returned to its resting position.
-    if (reducedMotion && selectedKey === null && !focusAnimationActiveRef.current) return
+    // Ambient floating needs continuous frames. When it is disabled, the
+    // gallery can stop updating meshes after they return to their resting positions.
+    if ((reducedMotion || !enablePhotoFloating)
+      && selectedKey === null
+      && !focusAnimationActiveRef.current) return
 
     const selected = selectedKey !== null ? layout.items[selectedKey] : null
     const pushRadius = 10
@@ -362,7 +411,7 @@ function GalleryPlanes({
         const focusDistance = instance.height / (2 * Math.tan(cameraFov / 2) * 0.88)
         targetY = 0
         targetZ = camera.position.z - focusDistance
-      } else if (!reducedMotion && !selected) {
+      } else if (!reducedMotion && enablePhotoFloating && !selected) {
         // Every photograph drifts gently in place. Hovering adds a little more
         // lift without changing the shared anti-gravity character.
         const floatTime = clock.elapsedTime + instance.textureIndex * 0.37
@@ -575,15 +624,13 @@ function GalleryDepthOfField({ selectedKey, focusPointRef, reducedMotion }) {
   })
 
   return (
-    <EffectComposer multisampling={0}>
-      <DepthOfField
-        ref={effectRef}
-        focusDistance={focusDistanceRef.current}
-        focusRange={DEFAULT_FOCUS_RANGE}
-        bokehScale={2.2}
-        resolutionScale={0.5}
-      />
-    </EffectComposer>
+    <DepthOfField
+      ref={effectRef}
+      focusDistance={focusDistanceRef.current}
+      focusRange={DEFAULT_FOCUS_RANGE}
+      bokehScale={2.2}
+      resolutionScale={0.5}
+    />
   )
 }
 
@@ -594,8 +641,12 @@ function WebGLGallery({
   motionRef,
   onCaptionChange,
   reducedMotion,
+  enablePhotoFloating,
+  enableDepthOfField,
+  enableScrollMotionBlur,
   compactViewport,
   photosCanReveal,
+  onPreloadProgress,
 }) {
   // Shuffle once when the gallery loads. Turning the CMS setting off uses the
   // exact order stored in gallery.json again.
@@ -677,17 +728,23 @@ function WebGLGallery({
           onFocusPlane={(worldX, cycleWidth) => motionRef.current.focusPlane?.(worldX, cycleWidth)}
           focusPointRef={focusPointRef}
           reducedMotion={reducedMotion}
+          enablePhotoFloating={enablePhotoFloating}
+          enableScrollMotionBlur={enableScrollMotionBlur}
           photosCanReveal={photosCanReveal}
+          motionRef={motionRef}
+          onPreloadProgress={onPreloadProgress}
         />
       </Suspense>
-      {/* Depth-of-field is the most expensive postprocessing pass. The mobile
-          composition keeps its natural 3D depth without this desktop effect. */}
-      {!compactViewport && (
-        <GalleryDepthOfField
-          selectedKey={selectedKey}
-          focusPointRef={focusPointRef}
-          reducedMotion={reducedMotion}
-        />
+      {/* Mobile skips the expensive depth-of-field pass. Scroll motion blur is
+          controlled separately and runs inside each photograph's material. */}
+      {enableDepthOfField && !compactViewport && (
+        <EffectComposer multisampling={0}>
+          <GalleryDepthOfField
+            selectedKey={selectedKey}
+            focusPointRef={focusPointRef}
+            reducedMotion={reducedMotion}
+          />
+        </EffectComposer>
       )}
     </Canvas>
   )
@@ -697,10 +754,11 @@ function WebGLGallery({
 // text with the WebGL gallery, then connects scrolling to the 3D camera.
 export default function Scene({
   images,
-  siteTitle,
-  subhead,
-  instagramUrl,
+  introDuration,
   randomizePhotoOrder,
+  enablePhotoFloating = true,
+  enableDepthOfField = true,
+  enableScrollMotionBlur = true,
 }) {
   // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
@@ -715,30 +773,42 @@ export default function Scene({
   const [activeCaption, setActiveCaption] = useState('')
   const reducedMotion = usePrefersReducedMotion()
   const compactViewport = useCompactViewport()
-  const displaySubhead = subhead?.trim() || 'places spaces & things'
-  const subheadCharacters = Array.from(displaySubhead)
-  const subheadTokens = createSubheadTokens(displaySubhead)
-  const [photosCanReveal, setPhotosCanReveal] = useState(reducedMotion)
+  const [introTextComplete, setIntroTextComplete] = useState(reducedMotion)
+  const [preloadProgress, setPreloadProgress] = useState(0)
+  const photosCanReveal = reducedMotion || (introTextComplete && preloadProgress >= 1)
+  const visiblePreloadProgress = reducedMotion
+    ? 1
+    : THREE.MathUtils.clamp(preloadProgress, 0, 1)
 
   useEffect(() => {
     if (reducedMotion) {
-      setPhotosCanReveal(true)
+      setIntroTextComplete(true)
       return undefined
     }
 
     // Preload nearby textures during the text animation, then release their
     // opacity fades only after the final character has settled.
-    setPhotosCanReveal(false)
-    const finalCharacterDelay = Math.max(0, subheadCharacters.length - 1)
-      * INTRO_CHARACTER_DELAY_MS
-    const revealDelay = INTRO_START_DELAY_MS
-      + finalCharacterDelay
-      + INTRO_CHARACTER_DURATION_MS
-      + INTRO_PHOTO_PAUSE_MS
-    const revealTimer = window.setTimeout(() => setPhotosCanReveal(true), revealDelay)
+    setIntroTextComplete(false)
+    const revealTimer = window.setTimeout(
+      () => setIntroTextComplete(true),
+      introDuration,
+    )
 
     return () => window.clearTimeout(revealTimer)
-  }, [displaySubhead, reducedMotion, subheadCharacters.length])
+  }, [introDuration, reducedMotion])
+
+  useEffect(() => {
+    // Astro owns the semantic H1. React only updates its black preload mask.
+    document.querySelector('.brand-signature[data-title]')?.style.setProperty(
+      '--preload-remainder',
+      `${(1 - visiblePreloadProgress) * 100}%`,
+    )
+  }, [visiblePreloadProgress])
+
+  useEffect(() => () => {
+    document.querySelector('.brand-signature[data-title]')
+      ?.style.removeProperty('--preload-remainder')
+  }, [])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -808,29 +878,7 @@ export default function Scene({
   }, [compactViewport, reducedMotion])
 
   return (
-    <main className="studio-shell">
-      {/* Decorative texture; aria-hidden keeps it out of screen readers. */}
-      <div className="studio-noise" aria-hidden="true" />
-      <h1 className="brand-signature">{siteTitle}</h1>
-      {/* Standard HTML links sit above the 3D canvas and remain easy to use. */}
-      <nav className="header-links" aria-label="Contact and social links">
-        <a className="contact-link" href="/contact">
-          Contact
-        </a>
-        <a
-          className="instagram-link"
-          href={instagramUrl || 'https://www.instagram.com/a_gaut'}
-          target="_blank"
-          rel="noreferrer"
-          aria-label="Visit a. gaut on Instagram"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="5" />
-            <circle cx="12" cy="12" r="4.25" />
-            <circle className="instagram-dot" cx="17.4" cy="6.7" r="1" />
-          </svg>
-        </a>
-      </nav>
+    <div className="gallery-runtime">
       {/* Captions only become visible while a captioned photograph is open. */}
       <p
         className={`project-caption${activeCaption ? ' is-visible' : ''}`}
@@ -842,46 +890,22 @@ export default function Scene({
       <div className="scroll-wrapper" ref={wrapperRef}>
         <section className="scroll-content" ref={contentRef}>
           <div className="depth-stage">
-            <div className="subhead-wrap">
-              {/* Keep the supporting gallery line editable in Site Settings. */}
-              <p className="subhead" aria-label={displaySubhead}>
-                {subheadTokens.map((token) => (
-                  token.type === 'space' ? (
-                    <span key={token.key} className="subhead-space" aria-hidden="true">
-                      {token.value}
-                    </span>
-                  ) : (
-                    <span key={token.key} className="subhead-word" aria-hidden="true">
-                      {token.characters.map(({ character, index }) => (
-                        <span
-                          key={`${index}-${character}`}
-                          className="subhead-character"
-                          style={{
-                            animationDelay: `${INTRO_START_DELAY_MS + index * INTRO_CHARACTER_DELAY_MS}ms`,
-                            animationDuration: `${INTRO_CHARACTER_DURATION_MS}ms`,
-                          }}
-                        >
-                          {character}
-                        </span>
-                      ))}
-                    </span>
-                  )
-                ))}
-              </p>
-            </div>
-
             <WebGLGallery
               images={images}
               randomizePhotoOrder={randomizePhotoOrder}
               motionRef={motionRef}
               onCaptionChange={setActiveCaption}
               reducedMotion={reducedMotion}
+              enablePhotoFloating={enablePhotoFloating}
+              enableDepthOfField={enableDepthOfField}
+              enableScrollMotionBlur={enableScrollMotionBlur}
               compactViewport={compactViewport}
               photosCanReveal={photosCanReveal}
+              onPreloadProgress={setPreloadProgress}
             />
           </div>
         </section>
       </div>
-    </main>
+    </div>
   )
 }
