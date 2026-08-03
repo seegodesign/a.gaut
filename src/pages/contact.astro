@@ -6,6 +6,8 @@ import '../styles.css'
 const siteTitle = settings.siteTitle || 'Adrian Gaut'
 const title = `Contact — ${siteTitle}`
 const description = 'Contact photographer Adrian Gaut and his representation.'
+const socialImageAlt = settings.socialImageAlt?.trim()
+  || 'Selected work by Adrian Gaut'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 const socialImageUrl = settings.socialImage
   ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
@@ -27,11 +29,12 @@ const socialImageUrl = settings.socialImage
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
     {socialImageUrl && <meta property="og:image" content={socialImageUrl} />}
-    {socialImageUrl && <meta property="og:image:alt" content="Selected work by Adrian Gaut" />}
+    {socialImageUrl && <meta property="og:image:alt" content={socialImageAlt} />}
     <meta name="twitter:card" content={socialImageUrl ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     {socialImageUrl && <meta name="twitter:image" content={socialImageUrl} />}
+    {socialImageUrl && <meta name="twitter:image:alt" content={socialImageAlt} />}
     <title>{title}</title>
     <ClientRouter />
   </head>

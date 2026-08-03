@@ -672,7 +672,13 @@ function WebGLGallery({
 
 // This is the main page component. It combines the regular HTML header and
 // text with the WebGL gallery, then connects scrolling to the 3D camera.
-export default function Scene({ images, siteTitle, randomizePhotoOrder }) {
+export default function Scene({
+  images,
+  siteTitle,
+  subhead,
+  instagramUrl,
+  randomizePhotoOrder,
+}) {
   // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
   const contentRef = useRef(null)
@@ -762,7 +768,7 @@ export default function Scene({ images, siteTitle, randomizePhotoOrder }) {
         </a>
         <a
           className="instagram-link"
-          href="https://www.instagram.com/a_gaut"
+          href={instagramUrl || 'https://www.instagram.com/a_gaut'}
           target="_blank"
           rel="noreferrer"
           aria-label="Visit a. gaut on Instagram"
@@ -785,8 +791,9 @@ export default function Scene({ images, siteTitle, randomizePhotoOrder }) {
       <div className="scroll-wrapper" ref={wrapperRef}>
         <section className="scroll-content" ref={contentRef}>
           <div className="depth-stage">
-            <div className="name-wrap">
-              <p className="kicker">places spaces &amp; things</p>
+            <div className="subhead-wrap">
+              {/* Keep the supporting gallery line editable in Site Settings. */}
+              <p className="subhead">{subhead || 'places spaces & things'}</p>
             </div>
 
             <WebGLGallery

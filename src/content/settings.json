@@ -1,5 +1,10 @@
 {
   "siteTitle": "ADRIAN GAUT",
+  "subhead": "places spaces & things",
+  "seoTitle": "Adrian Gaut",
+  "seoDescription": "The photography portfolio of Adrian Gaut.",
   "randomizePhotoOrder": true,
-  "socialImage": ""
+  "socialImage": "",
+  "socialImageAlt": "Selected work by Adrian Gaut",
+  "instagramUrl": "https://www.instagram.com/a_gaut"
 }

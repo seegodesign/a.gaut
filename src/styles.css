@@ -270,7 +270,7 @@ body {
 }
 
 /* Center the small descriptive line at the bottom of the viewport. */
-.name-wrap {
+.subhead-wrap {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -282,7 +282,7 @@ body {
   text-transform: lowercase;
 }
 
-.kicker {
+.subhead {
   margin: 0;
   letter-spacing: 0.2em;
   font-size: clamp(0.62rem, 0.94vw, 0.9rem);
@@ -323,13 +323,13 @@ body {
     letter-spacing: 0.13em;
   }
 
-  .name-wrap {
+  .subhead-wrap {
     padding-right: max(var(--page-gutter), env(safe-area-inset-right));
     padding-bottom: max(2.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
     padding-left: max(var(--page-gutter), env(safe-area-inset-left));
   }
 
-  .kicker {
+  .subhead {
     font-size: 0.64rem;
     letter-spacing: 0.16em;
     text-align: center;

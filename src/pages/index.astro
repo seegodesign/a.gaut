@@ -6,8 +6,13 @@ import settings from '../content/settings.json'
 import { getOptimizedUploadPath } from '../lib/imagePaths.js'
 import '../styles.css'
 
-const title = settings.siteTitle || 'Adrian Gaut'
-const description = 'The photography portfolio of Adrian Gaut.'
+const siteTitle = settings.siteTitle?.trim() || 'Adrian Gaut'
+// Editors can tune search and sharing copy without changing the visible name.
+const title = settings.seoTitle?.trim() || siteTitle
+const description = settings.seoDescription?.trim()
+  || 'The photography portfolio of Adrian Gaut.'
+const socialImageAlt = settings.socialImageAlt?.trim()
+  || 'Selected work by Adrian Gaut'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 const socialImageUrl = settings.socialImage
   ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
@@ -30,16 +35,17 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
     <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content={title} />
+    <meta property="og:site_name" content={siteTitle} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
     {socialImageUrl && <meta property="og:image" content={socialImageUrl} />}
-    {socialImageUrl && <meta property="og:image:alt" content="Selected work by Adrian Gaut" />}
+    {socialImageUrl && <meta property="og:image:alt" content={socialImageAlt} />}
     <meta name="twitter:card" content={socialImageUrl ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     {socialImageUrl && <meta name="twitter:image" content={socialImageUrl} />}
+    {socialImageUrl && <meta name="twitter:image:alt" content={socialImageAlt} />}
     <title>{title}</title>
     <ClientRouter />
   </head>
@@ -51,6 +57,8 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
     <App
       images={optimizedGalleryImages}
       siteTitle={settings.siteTitle}
+      subhead={settings.subhead}
+      instagramUrl={settings.instagramUrl}
       randomizePhotoOrder={settings.randomizePhotoOrder}
       client:only="react"
     />
