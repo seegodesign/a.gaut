@@ -35,17 +35,27 @@ files in the Git repository. Changes made in the CMS are committed to the
 
 CMS content is split by responsibility:
 
-- `src/content/site.json`: site title, gallery subhead, and Instagram URL.
-- `src/content/appearance.json`: shared background gradient colors and opacity.
+- `src/content/site.json`: site title, optional homepage headline, gallery
+  subhead and its animation setting, and Instagram URL.
+- `src/content/appearance.json`: site-wide Google Font selection plus shared
+  background gradient colors and opacity.
 - `src/content/gallery.json`: gallery images, order, and optional captions.
-- `src/content/gallery-settings.json`: gallery ordering, auto-scroll, and
-  visual effects.
+- `src/content/gallery-settings.json`: gallery ordering, auto-scroll, background
+  overlay opacity, edge fade, and visual effects.
 - `src/content/seo-social.json`: search metadata and social sharing image.
 - `src/content/contact.json`: representation and contact-page details.
 
 In Sveltia, Site Identity, Appearance, Search & Sharing, and Contact Page are singleton
 pages that open directly from the sidebar. Gallery remains a collection because
 its image editor and behavior settings are separate files.
+
+Gallery images can be reordered with the drag handle in the CMS image list.
+The saved order is used on the site unless **Randomize Photo Order** is enabled
+under Gallery Behavior.
+
+The Appearance page accepts any exact family name listed on Google Fonts. The
+site loads that family through the Google Fonts CSS API and falls back to its
+local sans-serif stack when the field is blank or the requested font is unavailable.
 
 Original uploads must remain in `public/uploads`. Sveltia uses that directory
 as its media library and saves paths such as `/uploads/photo.jpg` in the JSON.

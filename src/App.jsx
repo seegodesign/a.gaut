@@ -12,7 +12,9 @@ export default function App({
   enableDepthDarkening,
   enableDepthOfField,
   bokehStrength,
+  backgroundOverlayOpacity,
   enableScrollMotionBlur,
+  enableCarouselEdgeFade,
 }) {
   return (
     <Scene
@@ -25,7 +27,9 @@ export default function App({
       enableDepthDarkening={enableDepthDarkening}
       enableDepthOfField={enableDepthOfField}
       bokehStrength={bokehStrength}
+      backgroundOverlayOpacity={backgroundOverlayOpacity}
       enableScrollMotionBlur={enableScrollMotionBlur}
+      enableCarouselEdgeFade={enableCarouselEdgeFade}
     />
   )
 }

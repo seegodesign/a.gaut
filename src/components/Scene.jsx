@@ -31,11 +31,14 @@ const SELECTED_FOCUS_RANGE = 1.35
 const DEFAULT_BOKEH_STRENGTH = 2.2
 const MAX_BOKEH_STRENGTH = 10
 const FARTHEST_DEPTH_BRIGHTNESS = 0.75
-const BACKDROP_OPACITY = 0.9
-const BACKDROP_GAP = 0.08
+const DEFAULT_BACKGROUND_OVERLAY_OPACITY = 0.9
+const BACKDROP_Z = -20
 const DEFAULT_AUTO_SCROLL_SPEED = 48
 const MIN_AUTO_SCROLL_SPEED = 5
 const MAX_AUTO_SCROLL_SPEED = 200
+const EDGE_FADE_MIN_WIDTH_PX = 120
+const EDGE_FADE_MAX_WIDTH_PX = 300
+const EDGE_FADE_VIEWPORT_PORTION = 0.16
 const AUTO_SCROLL_MANUAL_PAUSE_MS = 1200
 const PRELOAD_INDICATOR_FAILSAFE_MS = 2500
 const PRELOAD_PROGRESS_TRANSITION_MS = 700
@@ -55,16 +58,6 @@ const TEXTURE_PRELOAD_MARGIN = 7
 function loopOffset(value, cycle) {
   if (!cycle) return 0
   return ((value % cycle) + cycle) % cycle
-}
-
-// Material colors are stored in linear space, while the scrim's blended
-// darkness is perceived in display (sRGB) space. Convert before multiplying a
-// texture so a manually dimmed photo matches the same photo behind the scrim.
-function displayBrightnessToLinear(value) {
-  const brightness = THREE.MathUtils.clamp(value, 0, 1)
-  return brightness <= 0.04045
-    ? brightness / 12.92
-    : Math.pow((brightness + 0.055) / 1.055, 2.4)
 }
 
 // Return a repeatable "random-looking" number between 0 and 1.
@@ -220,7 +213,9 @@ function GalleryPlanes({
   reducedMotion,
   enablePhotoFloating,
   enableDepthDarkening,
+  backgroundOverlayOpacity,
   enableScrollMotionBlur,
+  enableCarouselEdgeFade,
   photosCanReveal,
   motionRef,
   onPreloadProgress,
@@ -236,9 +231,6 @@ function GalleryPlanes({
   const meshRefs = useRef(new Map())
   const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
-  const previousSelectedKeyRef = useRef(null)
-  const selectionRevealRef = useRef({ key: null, brightness: 1 })
-  const departingRevealsRef = useRef(new Map())
   const initialPreloadRef = useRef(null)
   const textureLoader = useMemo(() => new THREE.TextureLoader(), [])
   const scrollBlurUniform = useMemo(() => new THREE.Uniform(0), [])
@@ -275,19 +267,25 @@ function GalleryPlanes({
         visible: false,
       })
       const depthBrightnessUniform = new THREE.Uniform(1)
+      const focusDimUniform = new THREE.Uniform(0)
       material.userData.depthBrightnessUniform = depthBrightnessUniform
+      material.userData.focusDimUniform = focusDimUniform
+      const edgeFadeWidthUniform = new THREE.Uniform(0)
+      const viewportWidthUniform = new THREE.Uniform(1)
+      material.userData.edgeFadeWidthUniform = edgeFadeWidthUniform
+      material.userData.viewportWidthUniform = viewportWidthUniform
 
-      if (enableScrollMotionBlur || enableDepthDarkening) {
-        material.onBeforeCompile = (shader) => {
-          let uniformDeclarations = ''
-          let mapFragment = '#include <map_fragment>'
+      material.onBeforeCompile = (shader) => {
+        let uniformDeclarations = 'uniform float galleryFocusDim;\n'
+        let mapFragment = '#include <map_fragment>'
+        shader.uniforms.galleryFocusDim = focusDimUniform
 
-          if (enableScrollMotionBlur) {
-            // Blur samples remain inside this photo's texture. Clamping the UVs
-            // prevents the page background from bleeding into photo edges.
-            shader.uniforms.scrollImageBlur = scrollBlurUniform
-            uniformDeclarations += 'uniform float scrollImageBlur;\n'
-            mapFragment = `#ifdef USE_MAP
+        if (enableScrollMotionBlur) {
+          // Blur samples remain inside this photo's texture. Clamping the UVs
+          // prevents the page background from bleeding into photo edges.
+          shader.uniforms.scrollImageBlur = scrollBlurUniform
+          uniformDeclarations += 'uniform float scrollImageBlur;\n'
+          mapFragment = `#ifdef USE_MAP
               vec2 imageBlurStep = vec2(scrollImageBlur, 0.0);
               vec4 sampledDiffuseColor = texture2D(map, vMapUv) * 0.40;
               sampledDiffuseColor += texture2D(map, clamp(vMapUv - imageBlurStep, vec2(0.001), vec2(0.999))) * 0.22;
@@ -299,27 +297,40 @@ function GalleryPlanes({
               #endif
               diffuseColor *= sampledDiffuseColor;
             #endif`
-          }
-
-          if (enableDepthDarkening) {
-            shader.uniforms.galleryDepthBrightness = depthBrightnessUniform
-            uniformDeclarations += 'uniform float galleryDepthBrightness;\n'
-            mapFragment += '\ndiffuseColor.rgb *= galleryDepthBrightness;'
-          }
-
-          shader.fragmentShader = `${uniformDeclarations}${shader.fragmentShader}`.replace(
-            '#include <map_fragment>',
-            mapFragment,
-          )
         }
-        material.customProgramCacheKey = () => (
-          `gallery-material-${enableScrollMotionBlur ? 'blur' : 'sharp'}-${enableDepthDarkening ? 'depth' : 'flat'}-v1`
+
+        if (enableDepthDarkening) {
+          shader.uniforms.galleryDepthBrightness = depthBrightnessUniform
+          uniformDeclarations += 'uniform float galleryDepthBrightness;\n'
+          mapFragment += '\ndiffuseColor.rgb *= galleryDepthBrightness;'
+        }
+
+        if (enableCarouselEdgeFade) {
+          shader.uniforms.galleryEdgeFadeWidthPx = edgeFadeWidthUniform
+          shader.uniforms.galleryViewportWidthPx = viewportWidthUniform
+          uniformDeclarations += 'uniform float galleryEdgeFadeWidthPx;\nuniform float galleryViewportWidthPx;\n'
+          mapFragment += `
+            float galleryEdgeFade = smoothstep(0.0, galleryEdgeFadeWidthPx, gl_FragCoord.x)
+              * smoothstep(0.0, galleryEdgeFadeWidthPx, galleryViewportWidthPx - gl_FragCoord.x);
+            diffuseColor.a *= galleryEdgeFade;`
+        }
+
+        // Darken inactive photographs inside their existing material. Keeping
+        // this out of the depth graph prevents a moving photo from ever
+        // crossing through a fading scrim.
+        mapFragment += '\ndiffuseColor.rgb *= 1.0 - galleryFocusDim;'
+        shader.fragmentShader = `${uniformDeclarations}${shader.fragmentShader}`.replace(
+          '#include <map_fragment>',
+          mapFragment,
         )
       }
+      material.customProgramCacheKey = () => (
+        `gallery-material-${enableScrollMotionBlur ? 'blur' : 'sharp'}-${enableDepthDarkening ? 'depth' : 'flat'}-${enableCarouselEdgeFade ? 'edgefade' : 'solid'}-v3`
+      )
 
       return material
     }),
-    [enableDepthDarkening, enableScrollMotionBlur, images, scrollBlurUniform],
+    [enableCarouselEdgeFade, enableDepthDarkening, enableScrollMotionBlur, images, scrollBlurUniform],
   )
   const backdropMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#000000',
@@ -329,54 +340,6 @@ function GalleryPlanes({
     depthWrite: false,
     toneMapped: false,
   }), [])
-
-  useLayoutEffect(() => {
-    const previousKey = previousSelectedKeyRef.current
-
-    // A photo selected again while it is still departing should immediately
-    // return to normal ordering before its incoming reveal begins.
-    if (selectedKey !== null && departingRevealsRef.current.has(selectedKey)) {
-      departingRevealsRef.current.delete(selectedKey)
-      materials[selectedKey]?.color.setScalar(1)
-      instances.forEach((instance) => {
-        if (instance.textureIndex === selectedKey) {
-          const mesh = meshRefs.current.get(instance.key)
-          if (mesh) mesh.renderOrder = 0
-        }
-      })
-    }
-
-    if (previousKey !== null && previousKey !== selectedKey) {
-      materials[previousKey]?.color.setScalar(1)
-      departingRevealsRef.current.set(previousKey, { brightness: 1 })
-      // Draw the outgoing photo after the scrim while its brightness fades.
-      // Once it is physically behind the scrim, normal depth ordering resumes.
-      instances.forEach((instance) => {
-        if (instance.textureIndex === previousKey) {
-          const mesh = meshRefs.current.get(instance.key)
-          if (mesh) mesh.renderOrder = 2
-        }
-      })
-    }
-
-    // If another photo was already open, the newly clicked photo was visibly
-    // behind the dark scrim. Match that darkness before the browser paints its
-    // selected state, then let the frame loop reveal it smoothly.
-    if (
-      selectedKey !== null
-      && previousKey !== null
-      && selectedKey !== previousKey
-      && backdropMaterial.opacity > 0.01
-    ) {
-      const brightness = Math.max(0.08, 1 - backdropMaterial.opacity)
-      materials[selectedKey]?.color.setScalar(displayBrightnessToLinear(brightness))
-      selectionRevealRef.current = { key: selectedKey, brightness }
-    } else if (selectedKey === null) {
-      selectionRevealRef.current = { key: null, brightness: 1 }
-    }
-
-    previousSelectedKeyRef.current = selectedKey
-  }, [backdropMaterial, instances, materials, selectedKey])
 
   const reportPreloadProgress = useCallback(() => {
     const plannedTextures = initialPreloadRef.current
@@ -465,6 +428,24 @@ function GalleryPlanes({
 
   // useFrame runs once for every rendered animation frame.
   useFrame(({ camera, clock }, delta) => {
+    if (enableCarouselEdgeFade) {
+      const viewportWidth = gl.domElement.width || gl.domElement.clientWidth || 1
+      const edgeFadeWidth = THREE.MathUtils.clamp(
+        viewportWidth * EDGE_FADE_VIEWPORT_PORTION,
+        EDGE_FADE_MIN_WIDTH_PX,
+        EDGE_FADE_MAX_WIDTH_PX,
+      )
+
+      materials.forEach((material) => {
+        const edgeFadeWidthUniform = material.userData.edgeFadeWidthUniform
+        const viewportWidthUniform = material.userData.viewportWidthUniform
+        if (!edgeFadeWidthUniform || !viewportWidthUniform) return
+
+        edgeFadeWidthUniform.value = edgeFadeWidth
+        viewportWidthUniform.value = viewportWidth
+      })
+    }
+
     // A symmetric horizontal lens blur feels softer than a trailing echo. It is
     // applied inside each photo, so HTML text and transparent canvas edges stay crisp.
     const blurTarget = !enableScrollMotionBlur
@@ -542,27 +523,12 @@ function GalleryPlanes({
         : THREE.MathUtils.damp(material.opacity, 1, 7, delta)
 
       // Return to the simplest solid material after the short fade finishes.
-      if (material.opacity > 0.995 && material.transparent) {
+      if (material.opacity > 0.995 && material.transparent && !enableCarouselEdgeFade) {
         material.opacity = 1
         material.transparent = false
         material.needsUpdate = true
       }
     })
-
-    const selectionReveal = selectionRevealRef.current
-    if (selectionReveal.key !== null) {
-      selectionReveal.brightness = reducedMotion
-        ? 1
-        : THREE.MathUtils.damp(selectionReveal.brightness, 1, 5, delta)
-      materials[selectionReveal.key]?.color.setScalar(
-        displayBrightnessToLinear(selectionReveal.brightness),
-      )
-
-      if (selectionReveal.brightness > 0.995) {
-        materials[selectionReveal.key]?.color.setScalar(1)
-        selectionRevealRef.current = { key: null, brightness: 1 }
-      }
-    }
 
     // Ambient floating needs continuous frames. When it is disabled, the
     // gallery can stop updating meshes after they return to their resting positions.
@@ -576,6 +542,24 @@ function GalleryPlanes({
     let largestError = 0
     let closestFocusedMesh = null
     let closestFocusedDistance = Infinity
+
+    // Use the same opacity and damping as the background scrim. Each texture
+    // has one material shared by all three infinite-gallery copies, so their
+    // transitions stay synchronized without extra overlay geometry.
+    materials.forEach((material, textureIndex) => {
+      const focusDimUniform = material.userData.focusDimUniform
+      const targetDim = selected && textureIndex !== selectedKey
+        ? backgroundOverlayOpacity
+        : 0
+
+      largestError = Math.max(
+        largestError,
+        Math.abs(focusDimUniform.value - targetDim),
+      )
+      focusDimUniform.value = reducedMotion
+        ? targetDim
+        : THREE.MathUtils.damp(focusDimUniform.value, targetDim, 7, delta)
+    })
 
     instances.forEach((instance) => {
       const mesh = meshRefs.current.get(instance.key)
@@ -663,11 +647,7 @@ function GalleryPlanes({
 
     const backdrop = backdropRef.current
     if (backdrop) {
-      const targetOpacity = selected && closestFocusedMesh ? BACKDROP_OPACITY : 0
-
-      if (selected && closestFocusedMesh) {
-        backdrop.position.z = closestFocusedMesh.position.z - BACKDROP_GAP
-      }
+      const targetOpacity = selected ? backgroundOverlayOpacity : 0
 
       // Keep the fading scrim locked to the camera even after selection is
       // cleared. Otherwise residual momentum can reveal its edges for a frame
@@ -691,41 +671,6 @@ function GalleryPlanes({
       backdropMaterial.opacity = reducedMotion
         ? targetOpacity
         : THREE.MathUtils.damp(backdropMaterial.opacity, targetOpacity, 7, delta)
-
-      departingRevealsRef.current.forEach((departure, textureIndex) => {
-        const targetBrightness = selected
-          ? Math.max(0.08, 1 - backdropMaterial.opacity)
-          : 1
-        departure.brightness = reducedMotion
-          ? targetBrightness
-          : THREE.MathUtils.damp(departure.brightness, targetBrightness, 5, delta)
-        materials[textureIndex]?.color.setScalar(
-          displayBrightnessToLinear(departure.brightness),
-        )
-
-        const isBehindBackdrop = instances
-          .filter((instance) => instance.textureIndex === textureIndex)
-          .every((instance) => {
-            const mesh = meshRefs.current.get(instance.key)
-            return !mesh || mesh.position.z < backdrop.position.z - 0.001
-          })
-        const transitionComplete = selected
-          ? isBehindBackdrop
-            && largestError < 0.01
-            && Math.abs(departure.brightness - targetBrightness) < 0.005
-          : backdropMaterial.opacity < 0.005
-
-        if (transitionComplete) {
-          materials[textureIndex]?.color.setScalar(1)
-          instances.forEach((instance) => {
-            if (instance.textureIndex === textureIndex) {
-              const mesh = meshRefs.current.get(instance.key)
-              if (mesh) mesh.renderOrder = 0
-            }
-          })
-          departingRevealsRef.current.delete(textureIndex)
-        }
-      })
     }
 
     if (!selected && largestError < 0.001) {
@@ -735,15 +680,15 @@ function GalleryPlanes({
 
   return (
     <group dispose={null}>
-      {/* This screen-sized scrim sits behind the active photo but in front of
-          every receded photo, so depth testing leaves only the active one bright. */}
+      {/* This scrim darkens the empty canvas behind every photograph. Inactive
+          photos are darkened independently inside their own materials. */}
       <mesh
         ref={backdropRef}
         geometry={geometry}
         material={backdropMaterial}
-        position={[0, 0, -20]}
+        position={[0, 0, BACKDROP_Z]}
         raycast={() => null}
-        renderOrder={1}
+        renderOrder={-1}
       />
       {/* Turn each calculated gallery item into a clickable 3D mesh. */}
       {instances.map((item) => (
@@ -876,7 +821,9 @@ function WebGLGallery({
   enableDepthDarkening,
   enableDepthOfField,
   bokehStrength,
+  backgroundOverlayOpacity,
   enableScrollMotionBlur,
+  enableCarouselEdgeFade,
   compactViewport,
   photosCanReveal,
   onPreloadProgress,
@@ -975,7 +922,9 @@ function WebGLGallery({
           reducedMotion={reducedMotion}
           enablePhotoFloating={enablePhotoFloating}
           enableDepthDarkening={enableDepthDarkening}
+          backgroundOverlayOpacity={backgroundOverlayOpacity}
           enableScrollMotionBlur={enableScrollMotionBlur}
+          enableCarouselEdgeFade={enableCarouselEdgeFade}
           photosCanReveal={photosCanReveal}
           motionRef={motionRef}
           onPreloadProgress={onPreloadProgress}
@@ -1009,7 +958,9 @@ export default function Scene({
   enableDepthDarkening = false,
   enableDepthOfField = true,
   bokehStrength = DEFAULT_BOKEH_STRENGTH,
+  backgroundOverlayOpacity = DEFAULT_BACKGROUND_OVERLAY_OPACITY,
   enableScrollMotionBlur = true,
+  enableCarouselEdgeFade = true,
 }) {
   // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
@@ -1031,6 +982,10 @@ export default function Scene({
   const resolvedBokehStrength = Number.isFinite(parsedBokehStrength)
     ? THREE.MathUtils.clamp(parsedBokehStrength, 0, MAX_BOKEH_STRENGTH)
     : DEFAULT_BOKEH_STRENGTH
+  const parsedBackgroundOverlayOpacity = Number(backgroundOverlayOpacity)
+  const resolvedBackgroundOverlayOpacity = Number.isFinite(parsedBackgroundOverlayOpacity)
+    ? THREE.MathUtils.clamp(parsedBackgroundOverlayOpacity, 0, 1)
+    : DEFAULT_BACKGROUND_OVERLAY_OPACITY
   const parsedAutoScrollSpeed = Number(autoScrollSpeed)
   const resolvedAutoScrollSpeed = Number.isFinite(parsedAutoScrollSpeed)
     ? THREE.MathUtils.clamp(
@@ -1042,12 +997,29 @@ export default function Scene({
   const [preloadProgress, setPreloadProgress] = useState(0)
   const [preloadFailsafeReached, setPreloadFailsafeReached] = useState(reducedMotion)
   const [preloadVisualComplete, setPreloadVisualComplete] = useState(reducedMotion)
+  const [introTextComplete, setIntroTextComplete] = useState(reducedMotion)
   const visiblePreloadProgress = reducedMotion || preloadFailsafeReached
     ? 1
     : THREE.MathUtils.clamp(preloadProgress, 0, 1)
-  // Reveal decoded photographs as soon as the visible progress fill finishes.
-  // A stalled initial request can still release the gallery via the failsafe.
-  const photosCanReveal = reducedMotion || preloadVisualComplete
+  // Reveal decoded photographs only after both the text animation and the
+  // visible preload fill finish. Stalled requests still release via failsafe.
+  const photosCanReveal = reducedMotion
+    || (introTextComplete && preloadVisualComplete)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setIntroTextComplete(true)
+      return undefined
+    }
+
+    setIntroTextComplete(false)
+    const introTimer = window.setTimeout(
+      () => setIntroTextComplete(true),
+      introDuration,
+    )
+
+    return () => window.clearTimeout(introTimer)
+  }, [introDuration, reducedMotion])
 
   useEffect(() => {
     if (reducedMotion) {
@@ -1401,7 +1373,9 @@ export default function Scene({
               enableDepthDarkening={enableDepthDarkening}
               enableDepthOfField={enableDepthOfField}
               bokehStrength={resolvedBokehStrength}
+              backgroundOverlayOpacity={resolvedBackgroundOverlayOpacity}
               enableScrollMotionBlur={enableScrollMotionBlur}
+              enableCarouselEdgeFade={enableCarouselEdgeFade}
               compactViewport={compactViewport}
               photosCanReveal={photosCanReveal}
               onPreloadProgress={setPreloadProgress}

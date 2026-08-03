@@ -7,11 +7,15 @@ import gallerySettings from '../content/gallery-settings.json'
 import seoSocial from '../content/seo-social.json'
 import site from '../content/site.json'
 import { createBackgroundStyle, getBackgroundThemeColor } from '../lib/backgroundStyle.js'
+import { createGoogleFontSettings } from '../lib/googleFont.js'
 import { getOptimizedUploadPath } from '../lib/imagePaths.js'
 import '../styles.css'
 
 const siteTitle = site.siteTitle?.trim() || 'Adrian Gaut'
+const headline = site.headline?.trim() || siteTitle
 const backgroundStyle = createBackgroundStyle(appearance)
+const googleFont = createGoogleFontSettings(appearance.googleFontFamily)
+const documentStyle = `${backgroundStyle}; ${googleFont.style}`
 const backgroundThemeColor = getBackgroundThemeColor(appearance)
 // Editors can tune search and sharing copy without changing the visible name.
 const title = seoSocial.seoTitle?.trim() || siteTitle
@@ -31,6 +35,9 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
 }))
 const instagramUrl = site.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'
 const subhead = site.subhead?.trim() || 'places spaces & things'
+// Default to enabled so CMS documents created before this setting retain the
+// existing character reveal.
+const animateSubhead = site.animateSubhead !== false
 const introStartDelay = 180
 const introCharacterDelay = 55
 const introCharacterDuration = 480
@@ -50,19 +57,24 @@ const subheadWords = rawSubheadWords.map((word, wordIndex) => {
   if (wordIndex < rawSubheadWords.length - 1) subheadCharacterIndex += 1
   return { characters }
 })
-const introDuration = introStartDelay
-  + Math.max(0, Array.from(subhead).length - 1) * introCharacterDelay
-  + introCharacterDuration
-  + introPhotoPause
+const introDuration = animateSubhead
+  ? introStartDelay
+    + Math.max(0, Array.from(subhead).length - 1) * introCharacterDelay
+    + introCharacterDuration
+    + introPhotoPause
+  : 0
 ---
 
 <!doctype html>
-<html lang="en" style={backgroundStyle} transition:animate={fade({ duration: '0.35s' })}>
+<html lang="en" style={documentStyle} transition:animate={fade({ duration: '0.35s' })}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content={backgroundThemeColor} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    {googleFont.href && <link rel="preconnect" href="https://fonts.googleapis.com" />}
+    {googleFont.href && <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />}
+    {googleFont.href && <link rel="stylesheet" href={googleFont.href} />}
     <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />
     <meta property="og:type" content="website" />
@@ -85,7 +97,7 @@ const introDuration = introStartDelay
       <div class="studio-noise" aria-hidden="true"></div>
 
       <!-- React updates only this title's preload mask; the H1 is static HTML. -->
-      <h1 class="brand-signature" data-title={siteTitle}>{siteTitle}</h1>
+      <h1 class="brand-signature" data-title={headline}>{headline}</h1>
 
       <nav class="header-links" aria-label="Contact and social links">
         <a class="contact-link" href="/contact">Contact</a>
@@ -106,21 +118,23 @@ const introDuration = introStartDelay
 
       <div class="subhead-wrap">
         <p class="subhead" aria-label={subhead}>
-          {subheadWords.map((word, wordIndex) => (
-            <>
-              <span class="subhead-word" aria-hidden="true">
-                {word.characters.map(({ character, index }) => (
-                  <span
-                    class="subhead-character"
-                    style={`animation-delay: ${introStartDelay + index * introCharacterDelay}ms; animation-duration: ${introCharacterDuration}ms;`}
-                  >
-                    {character}
-                  </span>
-                ))}
-              </span>
-              {wordIndex < subheadWords.length - 1 && ' '}
-            </>
-          ))}
+          {animateSubhead
+            ? subheadWords.map((word, wordIndex) => (
+              <>
+                <span class="subhead-word" aria-hidden="true">
+                  {word.characters.map(({ character, index }) => (
+                    <span
+                      class="subhead-character"
+                      style={`animation-delay: ${introStartDelay + index * introCharacterDelay}ms; animation-duration: ${introCharacterDuration}ms;`}
+                    >
+                      {character}
+                    </span>
+                  ))}
+                </span>
+                {wordIndex < subheadWords.length - 1 && ' '}
+              </>
+            ))
+            : subhead}
         </p>
       </div>
 
@@ -135,7 +149,9 @@ const introDuration = introStartDelay
         enableDepthDarkening={gallerySettings.enableDepthDarkening === true}
         enableDepthOfField={gallerySettings.enableDepthOfField !== false}
         bokehStrength={gallerySettings.bokehStrength}
+        backgroundOverlayOpacity={gallerySettings.backgroundOverlayOpacity}
         enableScrollMotionBlur={gallerySettings.enableScrollMotionBlur !== false}
+        enableCarouselEdgeFade={gallerySettings.enableCarouselEdgeFade !== false}
         client:only="react"
       />
     </main>

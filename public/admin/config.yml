@@ -27,11 +27,22 @@ singletons:
         widget: string
         required: true
         hint: The title of the site, shown in the browser tab and search results.
+      - name: headline
+        label: Homepage Headline
+        widget: string
+        required: false
+        hint: Optional visible headline for the homepage. Leave blank to use the Site Title.
       - name: subhead
         label: Subhead
         widget: string
         required: false
         hint: The large lines of text shown in the background of the gallery.
+      - name: animateSubhead
+        label: Animate Subhead
+        widget: boolean
+        default: true
+        required: false
+        hint: Reveal the subhead one character at a time when the gallery loads. Turn this off to show it immediately.
       - name: instagramUrl
         label: Instagram URL
         widget: string
@@ -45,6 +56,12 @@ singletons:
     file: /src/content/appearance.json
     format: json
     fields:
+      - name: googleFontFamily
+        label: Google Font Family
+        widget: string
+        required: false
+        default: Montserrat
+        hint: Enter the exact family name from fonts.google.com, such as Montserrat, Roboto Mono, or Playfair Display. Leave blank to use the site's fallback font.
       - name: overheadLight
         label: Overhead Light
         widget: object
@@ -209,7 +226,9 @@ collections:
             widget: list
             min: 1
             collapsed: true
+            allow_reorder: true
             thumbnail: image
+            hint: Drag images by their reorder handle to set the order used by the gallery.
             fields:
               - name: image
                 label: Image
@@ -274,9 +293,25 @@ collections:
             step: 0.1
             required: false
             hint: Controls the intensity of out-of-focus blur. Has no effect when Depth of Field is turned off.
+          - name: backgroundOverlayOpacity
+            label: Background Overlay Opacity
+            widget: number
+            value_type: float
+            default: 0.9
+            min: 0
+            max: 1
+            step: 0.05
+            required: false
+            hint: Controls how dark the background and inactive photos become when a photo is opened. Use 0 for no darkening and 1 for black.
           - name: enableScrollMotionBlur
             label: Scroll Motion Blur
             widget: boolean
             default: true
             required: false
             hint: Soften photos slightly during fast scrolling to make their movement feel smoother.
+          - name: enableCarouselEdgeFade
+            label: Carousel Edge Fade
+            widget: boolean
+            default: true
+            required: false
+            hint: Fade photos near the left and right screen edges so they transition more softly into the carousel loop.

@@ -1,9 +1,11 @@
 /* Site-wide defaults and reusable color values. */
 :root {
-  font-family: 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif;
+  font-family: var(--site-font-family, 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif);
   color: #0d0d0f;
   background: var(--background-gradient-middle, #f8f8f6);
-  font-synthesis: none;
+  /* Some display families offer only one weight, so allow the browser to
+     synthesize the heavier weights used by the navigation and wordmark. */
+  font-synthesis: weight;
   text-rendering: optimizeLegibility;
 
   --studio-bg: #f8f8f6;
@@ -97,7 +99,7 @@ body {
 }
 
 .contact-link {
-  font-family: 'futura-pt', 'Futura PT', 'Avenir Next', sans-serif;
+  font-family: var(--site-font-family, 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif);
   font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.16em;
@@ -132,7 +134,7 @@ body {
   padding-left: calc((var(--header-control-size) - var(--header-icon-size)) / 2);
   margin: 0;
   color: #0a0a0d;
-  font-family: 'futura-pt', 'Futura PT', 'Avenir Next', sans-serif;
+  font-family: var(--site-font-family, 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif);
   font-size: clamp(0.72rem, 2vw, 10rem);
   font-weight: 700;
   line-height: 1;
