@@ -755,6 +755,10 @@ export default function Scene({
       syncTouch: !reducedMotion,
       infinite: true,
       lerp: reducedMotion ? 1 : 0.045,
+      // Phone swipes should move deliberately through the photographs instead
+      // of flinging across several images from one short gesture.
+      touchMultiplier: compactViewport ? 0.5 : 1,
+      touchInertiaExponent: compactViewport ? 1.35 : 1.7,
       wheelMultiplier: 0.25,
     })
 
@@ -801,7 +805,7 @@ export default function Scene({
       motionRef.current.focusPlane = null
       lenis.destroy()
     }
-  }, [reducedMotion])
+  }, [compactViewport, reducedMotion])
 
   return (
     <main className="studio-shell">
