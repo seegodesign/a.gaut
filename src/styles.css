@@ -1,0 +1,128 @@
+:root {
+  font-family: 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif;
+  color: #0d0d0f;
+  background: #f8f8f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  --studio-bg: #f8f8f6;
+  --studio-shadow: rgba(20, 20, 20, 0.16);
+  --studio-shadow-soft: rgba(20, 20, 20, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 15% 10%, #ffffff 0%, #f8f8f6 35%, #f2f2ef 100%),
+    linear-gradient(170deg, rgba(255, 255, 255, 0.9), rgba(244, 244, 241, 0.95));
+}
+
+.studio-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  isolation: isolate;
+}
+
+.studio-noise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.35)),
+    repeating-linear-gradient(
+      0deg,
+      rgba(60, 60, 60, 0.03) 0,
+      rgba(60, 60, 60, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  z-index: 5;
+}
+
+.scroll-wrapper {
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-content {
+  width: 460vw;
+  min-height: 100%;
+}
+
+.depth-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.gallery-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.editorial-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  align-content: flex-end;
+  justify-items: center;
+  pointer-events: none;
+  text-transform: lowercase;
+}
+
+.kicker {
+  margin: 0;
+  letter-spacing: 0.42em;
+  font-size: clamp(0.62rem, 0.94vw, 0.9rem);
+  font-weight: 500;
+  opacity: 0.56;
+  transform: translateY(-2vh);
+}
+
+.editorial {
+  margin: 0;
+  font-size: clamp(5rem, 28vw, 23rem);
+  line-height: 0.9;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  color: #0a0a0d;
+  text-shadow:
+    0 10px 20px rgba(0, 0, 0, 0.07),
+    0 2px 5px rgba(0, 0, 0, 0.06);
+}
+
+@media (max-width: 900px) {
+  .scroll-content {
+    width: 880vw;
+  }
+
+  .editorial {
+    font-size: clamp(5rem, 34vw, 12rem);
+  }
+}
