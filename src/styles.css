@@ -37,7 +37,7 @@ body {
     /* A restrained vignette keeps the wall from looking digitally flat. */
     radial-gradient(ellipse 120% 100% at 50% 38%, transparent 58%, rgba(207, 204, 194, 0.16) 100%),
     /* Warm white paint with a barely visible darkening toward the floor. */
-    linear-gradient(180deg, #fafaf8 0%, #f7f7f4 58%, #c6c5bb 100%);
+    linear-gradient(180deg, #fafaf8 0%, #f7f7f4 58%, #deddd3 100%);
 }
 
 /* The page shell is the positioning area for every full-screen layer. */
@@ -60,7 +60,7 @@ body {
     repeating-linear-gradient(
       0deg,
       rgba(60, 60, 60, 0.03) 0,
-      rgba(60, 60, 60, 0.03) 1px,
+      rgba(60, 60, 60, 0.02) 1px,
       transparent 1px,
       transparent 3px
     );
@@ -290,6 +290,32 @@ body {
   opacity: 0.1;
 }
 
+/* React supplies staggered delays based on the CMS text length. */
+.subhead-word {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.subhead-space {
+  white-space: pre;
+}
+
+.subhead-character {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(0.22em);
+  animation-name: subhead-character-reveal;
+  animation-fill-mode: forwards;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes subhead-character-reveal {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .name {
   margin: 0;
   font-size: clamp(5rem, 28vw, 23rem);
@@ -352,5 +378,11 @@ body {
   .project-caption,
   .project-caption.is-visible {
     transform: translate(-50%, 0);
+  }
+
+  .subhead-character {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }

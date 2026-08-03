@@ -22,6 +22,10 @@ const DEFAULT_FOCUS_RANGE = 8
 const SELECTED_FOCUS_RANGE = 1.35
 const BACKDROP_OPACITY = 0.9
 const BACKDROP_GAP = 0.08
+const INTRO_START_DELAY_MS = 180
+const INTRO_CHARACTER_DELAY_MS = 55
+const INTRO_CHARACTER_DURATION_MS = 480
+const INTRO_PHOTO_PAUSE_MS = 140
 // Begin downloading photographs just outside the camera view. This gives the
 // browser time to decode the next few images without requesting the whole CMS
 // library when the page first opens.
@@ -52,6 +56,31 @@ function shuffleImages(images) {
   }
 
   return shuffled
+}
+
+// Split the subhead into non-breaking words while retaining one continuous
+// character index for the staggered intro timing.
+function createSubheadTokens(text) {
+  let characterIndex = 0
+
+  return text.split(/(\s+)/).filter(Boolean).map((segment, tokenIndex) => {
+    if (/^\s+$/.test(segment)) {
+      characterIndex += Array.from(segment).length
+      return {
+        key: `space-${tokenIndex}`,
+        type: 'space',
+        value: segment.replaceAll(' ', '\u00a0'),
+      }
+    }
+
+    const characters = Array.from(segment).map((character) => {
+      const index = characterIndex
+      characterIndex += 1
+      return { character, index }
+    })
+
+    return { characters, key: `word-${tokenIndex}`, type: 'word' }
+  })
 }
 
 // Follow the visitor's operating-system accessibility preference and update
@@ -152,6 +181,7 @@ function GalleryPlanes({
   onFocusPlane,
   focusPointRef,
   reducedMotion,
+  photosCanReveal,
 }) {
   const gl = useThree((state) => state.gl)
   // Astro reads this list from the CMS-managed gallery.json file.
@@ -290,7 +320,7 @@ function GalleryPlanes({
 
     // Fade decoded photographs in smoothly without causing a React render.
     materials.forEach((material, textureIndex) => {
-      if (!textureState.loaded.has(textureIndex)) return
+      if (!textureState.loaded.has(textureIndex) || !photosCanReveal) return
 
       material.opacity = reducedMotion
         ? 1
@@ -565,6 +595,7 @@ function WebGLGallery({
   onCaptionChange,
   reducedMotion,
   compactViewport,
+  photosCanReveal,
 }) {
   // Shuffle once when the gallery loads. Turning the CMS setting off uses the
   // exact order stored in gallery.json again.
@@ -646,6 +677,7 @@ function WebGLGallery({
           onFocusPlane={(worldX, cycleWidth) => motionRef.current.focusPlane?.(worldX, cycleWidth)}
           focusPointRef={focusPointRef}
           reducedMotion={reducedMotion}
+          photosCanReveal={photosCanReveal}
         />
       </Suspense>
       {/* Depth-of-field is the most expensive postprocessing pass. The mobile
@@ -683,6 +715,30 @@ export default function Scene({
   const [activeCaption, setActiveCaption] = useState('')
   const reducedMotion = usePrefersReducedMotion()
   const compactViewport = useCompactViewport()
+  const displaySubhead = subhead?.trim() || 'places spaces & things'
+  const subheadCharacters = Array.from(displaySubhead)
+  const subheadTokens = createSubheadTokens(displaySubhead)
+  const [photosCanReveal, setPhotosCanReveal] = useState(reducedMotion)
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setPhotosCanReveal(true)
+      return undefined
+    }
+
+    // Preload nearby textures during the text animation, then release their
+    // opacity fades only after the final character has settled.
+    setPhotosCanReveal(false)
+    const finalCharacterDelay = Math.max(0, subheadCharacters.length - 1)
+      * INTRO_CHARACTER_DELAY_MS
+    const revealDelay = INTRO_START_DELAY_MS
+      + finalCharacterDelay
+      + INTRO_CHARACTER_DURATION_MS
+      + INTRO_PHOTO_PAUSE_MS
+    const revealTimer = window.setTimeout(() => setPhotosCanReveal(true), revealDelay)
+
+    return () => window.clearTimeout(revealTimer)
+  }, [displaySubhead, reducedMotion, subheadCharacters.length])
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -784,7 +840,30 @@ export default function Scene({
           <div className="depth-stage">
             <div className="subhead-wrap">
               {/* Keep the supporting gallery line editable in Site Settings. */}
-              <p className="subhead">{subhead || 'places spaces & things'}</p>
+              <p className="subhead" aria-label={displaySubhead}>
+                {subheadTokens.map((token) => (
+                  token.type === 'space' ? (
+                    <span key={token.key} className="subhead-space" aria-hidden="true">
+                      {token.value}
+                    </span>
+                  ) : (
+                    <span key={token.key} className="subhead-word" aria-hidden="true">
+                      {token.characters.map(({ character, index }) => (
+                        <span
+                          key={`${index}-${character}`}
+                          className="subhead-character"
+                          style={{
+                            animationDelay: `${INTRO_START_DELAY_MS + index * INTRO_CHARACTER_DELAY_MS}ms`,
+                            animationDuration: `${INTRO_CHARACTER_DURATION_MS}ms`,
+                          }}
+                        >
+                          {character}
+                        </span>
+                      ))}
+                    </span>
+                  )
+                ))}
+              </p>
             </div>
 
             <WebGLGallery
@@ -794,6 +873,7 @@ export default function Scene({
               onCaptionChange={setActiveCaption}
               reducedMotion={reducedMotion}
               compactViewport={compactViewport}
+              photosCanReveal={photosCanReveal}
             />
           </div>
         </section>
