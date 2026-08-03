@@ -1,11 +1,15 @@
 ---
 import { ClientRouter, fade } from 'astro:transitions'
+import appearance from '../content/appearance.json'
 import contact from '../content/contact.json'
 import seoSocial from '../content/seo-social.json'
 import site from '../content/site.json'
+import { createBackgroundStyle, getBackgroundThemeColor } from '../lib/backgroundStyle.js'
 import '../styles.css'
 
 const siteTitle = site.siteTitle || 'Adrian Gaut'
+const backgroundStyle = createBackgroundStyle(appearance)
+const backgroundThemeColor = getBackgroundThemeColor(appearance)
 const title = `Contact — ${siteTitle}`
 const description = 'Contact photographer Adrian Gaut and his representation.'
 const socialImageAlt = seoSocial.socialImageAlt?.trim()
@@ -21,11 +25,11 @@ const contactEmail = contact.email || 'adrian@agaut.com'
 ---
 
 <!doctype html>
-<html lang="en" transition:animate={fade({ duration: '0.35s' })}>
+<html lang="en" style={backgroundStyle} transition:animate={fade({ duration: '0.35s' })}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8f8f6" />
+    <meta name="theme-color" content={backgroundThemeColor} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />

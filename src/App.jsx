@@ -9,7 +9,9 @@ export default function App({
   enableAutoScroll,
   autoScrollSpeed,
   enablePhotoFloating,
+  enableDepthDarkening,
   enableDepthOfField,
+  bokehStrength,
   enableScrollMotionBlur,
 }) {
   return (
@@ -20,7 +22,9 @@ export default function App({
       enableAutoScroll={enableAutoScroll}
       autoScrollSpeed={autoScrollSpeed}
       enablePhotoFloating={enablePhotoFloating}
+      enableDepthDarkening={enableDepthDarkening}
       enableDepthOfField={enableDepthOfField}
+      bokehStrength={bokehStrength}
       enableScrollMotionBlur={enableScrollMotionBlur}
     />
   )

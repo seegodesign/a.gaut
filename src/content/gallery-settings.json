@@ -1,8 +1,10 @@
 {
   "randomizePhotoOrder": true,
   "enableAutoScroll": true,
-  "autoScrollSpeed": 15,
-  "enablePhotoFloating": false,
+  "autoScrollSpeed": 5,
+  "enablePhotoFloating": true,
+  "enableDepthDarkening": true,
   "enableDepthOfField": false,
+  "bokehStrength": 2.2,
   "enableScrollMotionBlur": true
 }

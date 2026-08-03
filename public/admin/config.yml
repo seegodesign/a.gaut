@@ -31,13 +31,112 @@ singletons:
         label: Subhead
         widget: string
         required: false
-        hint: The small line of text shown near the bottom of the gallery.
+        hint: The large lines of text shown in the background of the gallery.
       - name: instagramUrl
         label: Instagram URL
         widget: string
         required: true
         default: https://www.instagram.com/a_gaut
         hint: The full URL opened by the Instagram icon in the site header.
+
+  - name: appearance
+    label: Appearance
+    icon: palette
+    file: /src/content/appearance.json
+    format: json
+    fields:
+      - name: overheadLight
+        label: Overhead Light
+        widget: object
+        collapsed: true
+        hint: The soft light centered above the page.
+        fields:
+          - name: color
+            label: Color
+            widget: color
+            default: '#ffffff'
+          - name: opacity
+            label: Opacity (%)
+            widget: number
+            value_type: int
+            default: 98
+            min: 0
+            max: 100
+            step: 1
+            hint: 0 is fully transparent; 100 is fully opaque.
+      - name: edgeVignette
+        label: Edge Vignette
+        widget: object
+        collapsed: true
+        hint: The subtle color darkening around the outer edges.
+        fields:
+          - name: color
+            label: Color
+            widget: color
+            default: '#cfccc2'
+          - name: opacity
+            label: Opacity (%)
+            widget: number
+            value_type: int
+            default: 16
+            min: 0
+            max: 100
+            step: 1
+            hint: 0 is fully transparent; 100 is fully opaque.
+      - name: gradientTop
+        label: Gradient Top
+        widget: object
+        collapsed: true
+        fields:
+          - name: color
+            label: Color
+            widget: color
+            default: '#fafaf8'
+          - name: opacity
+            label: Opacity (%)
+            widget: number
+            value_type: int
+            default: 100
+            min: 0
+            max: 100
+            step: 1
+            hint: 0 is fully transparent; 100 is fully opaque.
+      - name: gradientMiddle
+        label: Gradient Middle
+        widget: object
+        collapsed: true
+        fields:
+          - name: color
+            label: Color
+            widget: color
+            default: '#f7f7f4'
+          - name: opacity
+            label: Opacity (%)
+            widget: number
+            value_type: int
+            default: 100
+            min: 0
+            max: 100
+            step: 1
+            hint: 0 is fully transparent; 100 is fully opaque.
+      - name: gradientBottom
+        label: Gradient Bottom
+        widget: object
+        collapsed: true
+        fields:
+          - name: color
+            label: Color
+            widget: color
+            default: '#deddd3'
+          - name: opacity
+            label: Opacity (%)
+            widget: number
+            value_type: int
+            default: 100
+            min: 0
+            max: 100
+            step: 1
+            hint: 0 is fully transparent; 100 is fully opaque.
 
   - name: metadata
     label: Search & Sharing
@@ -153,12 +252,28 @@ collections:
             default: true
             required: false
             hint: Let photos drift gently and lift on hover. Turn this off to keep them still.
+          - name: enableDepthDarkening
+            label: Depth-Based Darkening
+            widget: boolean
+            default: false
+            required: false
+            hint: Progressively darken photographs as they sit farther from the camera.
           - name: enableDepthOfField
             label: Depth of Field Effect
             widget: boolean
             default: true
             required: false
             hint: Blur out-of-focus photos on larger screens. Turn this off to remove depth blur.
+          - name: bokehStrength
+            label: Bokeh Strength
+            widget: number
+            value_type: float
+            default: 2.2
+            min: 0
+            max: 10
+            step: 0.1
+            required: false
+            hint: Controls the intensity of out-of-focus blur. Has no effect when Depth of Field is turned off.
           - name: enableScrollMotionBlur
             label: Scroll Motion Blur
             widget: boolean

@@ -1,0 +1,22 @@
+{
+  "overheadLight": {
+    "color": "#ffffff",
+    "opacity": 98
+  },
+  "edgeVignette": {
+    "color": "#ffffff",
+    "opacity": 16
+  },
+  "gradientTop": {
+    "color": "#ffffff",
+    "opacity": 100
+  },
+  "gradientMiddle": {
+    "color": "#eeeeee",
+    "opacity": 100
+  },
+  "gradientBottom": {
+    "color": "#dddddd",
+    "opacity": 100
+  }
+}

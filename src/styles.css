@@ -2,7 +2,7 @@
 :root {
   font-family: 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif;
   color: #0d0d0f;
-  background: #f8f8f6;
+  background: var(--background-gradient-middle, #f8f8f6);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
@@ -33,11 +33,11 @@ body {
   overflow: hidden;
   background:
     /* Soft overhead light, similar to diffused lighting on a gallery wall. */
-    radial-gradient(ellipse 85% 55% at 50% -8%, rgba(255, 255, 255, 0.98), transparent 72%),
+    radial-gradient(ellipse 85% 55% at 50% -8%, var(--background-overhead-light, rgba(255, 255, 255, 0.98)), transparent 72%),
     /* A restrained vignette keeps the wall from looking digitally flat. */
-    radial-gradient(ellipse 120% 100% at 50% 38%, transparent 58%, rgba(207, 204, 194, 0.16) 100%),
+    radial-gradient(ellipse 120% 100% at 50% 38%, transparent 58%, var(--background-edge-vignette, rgba(207, 204, 194, 0.16)) 100%),
     /* Warm white paint with a barely visible darkening toward the floor. */
-    linear-gradient(180deg, #fafaf8 0%, #f7f7f4 58%, #deddd3 100%);
+    linear-gradient(180deg, var(--background-gradient-top, #fafaf8) 0%, var(--background-gradient-middle, #f7f7f4) 58%, var(--background-gradient-bottom, #deddd3) 100%);
 }
 
 /* The page shell is the positioning area for every full-screen layer. */

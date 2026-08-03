@@ -36,13 +36,14 @@ files in the Git repository. Changes made in the CMS are committed to the
 CMS content is split by responsibility:
 
 - `src/content/site.json`: site title, gallery subhead, and Instagram URL.
+- `src/content/appearance.json`: shared background gradient colors and opacity.
 - `src/content/gallery.json`: gallery images, order, and optional captions.
 - `src/content/gallery-settings.json`: gallery ordering, auto-scroll, and
   visual effects.
 - `src/content/seo-social.json`: search metadata and social sharing image.
 - `src/content/contact.json`: representation and contact-page details.
 
-In Sveltia, Site Identity, Search & Sharing, and Contact Page are singleton
+In Sveltia, Site Identity, Appearance, Search & Sharing, and Contact Page are singleton
 pages that open directly from the sidebar. Gallery remains a collection because
 its image editor and behavior settings are separate files.
 
