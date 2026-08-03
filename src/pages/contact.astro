@@ -59,6 +59,23 @@ const contactEmail = contact.email || 'adrian@agaut.com'
     <div class="studio-noise" aria-hidden="true"></div>
 
     <main class="contact-page">
+      <nav class="header-links" aria-label="Contact and social links">
+        <a class="contact-link" href="/contact" aria-current="page">Contact</a>
+        <a
+          class="instagram-link"
+          href={site.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Visit Adrian Gaut on Instagram"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="5"></rect>
+            <circle cx="12" cy="12" r="4.25"></circle>
+            <circle class="instagram-dot" cx="17.4" cy="6.7" r="1"></circle>
+          </svg>
+        </a>
+      </nav>
+
       <a class="brand-signature contact-brand" href="/" aria-label="Return to the gallery">
         {siteTitle}
       </a>
@@ -68,6 +85,7 @@ const contactEmail = contact.email || 'adrian@agaut.com'
           {representationPrefix}&nbsp;<a href={representationUrl}>{representationName}</a>
         </p>
         <p><a href={`mailto:${contactEmail}`}>{contactEmail}</a></p>
+        <p class="byline">Site by <a href="https://seegodesign.com" target="_blank" rel="noopener noreferrer">Seego Design</a></p>
       </div>
     </main>
   </body>

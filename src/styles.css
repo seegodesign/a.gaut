@@ -226,6 +226,11 @@ body {
   padding: clamp(1.25rem, 2.5vw, 2.5rem);
 }
 
+.contact-page .header-links {
+  top: calc(var(--page-gutter) + env(safe-area-inset-top, 0px));
+  right: calc(var(--page-gutter) + env(safe-area-inset-right, 0px));
+}
+
 /* This version of the name is a link that returns visitors to the gallery. */
 .contact-brand {
   pointer-events: auto;
@@ -368,6 +373,14 @@ body {
   text-shadow:
     0 10px 20px rgba(0, 0, 0, 0.09),
     0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.byline {
+  margin: 0;
+  font-size: 14px;
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
 }
 
 /* On narrow screens, add more scroll distance for comfortable touch movement. */
