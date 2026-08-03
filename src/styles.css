@@ -1,3 +1,4 @@
+/* Site-wide defaults and reusable color values. */
 :root {
   font-family: 'Helvetica Neue', 'Avenir Next', 'Futura PT', sans-serif;
   color: #0d0d0f;
@@ -10,10 +11,12 @@
   --studio-shadow-soft: rgba(20, 20, 20, 0.08);
 }
 
+/* Include padding and borders inside an element's declared width and height. */
 * {
   box-sizing: border-box;
 }
 
+/* Make the React application fill the entire browser window. */
 html,
 body,
 #root {
@@ -23,12 +26,14 @@ body,
 }
 
 body {
+  /* The custom gallery handles scrolling, so hide the browser's page overflow. */
   overflow: hidden;
   background:
     radial-gradient(circle at 15% 10%, #ffffff 0%, #f8f8f6 35%, #f2f2ef 100%),
     linear-gradient(170deg, rgba(255, 255, 255, 0.9), rgba(244, 244, 241, 0.95));
 }
 
+/* The page shell is the positioning area for every full-screen layer. */
 .studio-shell {
   position: relative;
   width: 100%;
@@ -36,6 +41,7 @@ body {
   isolation: isolate;
 }
 
+/* A faint non-interactive overlay gives the background a paper-like texture. */
 .studio-noise {
   position: absolute;
   inset: 0;
@@ -53,6 +59,7 @@ body {
   z-index: 5;
 }
 
+/* Keep the contact and Instagram links together in the top-right corner. */
 .header-links {
   position: absolute;
   top: clamp(1.25rem, 2.5vw, 2.5rem);
@@ -63,6 +70,7 @@ body {
   gap: 1rem;
 }
 
+/* Shared interactive appearance for both header links. */
 .contact-link,
 .instagram-link {
   color: #0a0a0d;
@@ -87,6 +95,7 @@ body {
   place-items: center;
 }
 
+/* The photographer's name stays fixed in the top-left corner. */
 .brand-signature {
   position: absolute;
   top: clamp(1.25rem, 2.5vw, 2.5rem);
@@ -103,6 +112,7 @@ body {
   pointer-events: none;
 }
 
+/* Give mouse and keyboard users the same visible interaction feedback. */
 .contact-link:hover,
 .contact-link:focus-visible,
 .instagram-link:hover,
@@ -117,6 +127,7 @@ body {
   outline-offset: 0.35rem;
 }
 
+/* Draw the Instagram logo using the lines in its inline SVG. */
 .instagram-link svg {
   width: 1.55rem;
   height: 1.55rem;
@@ -130,6 +141,7 @@ body {
   stroke: none;
 }
 
+/* This is the real scrollable element controlled by Lenis. */
 .scroll-wrapper {
   width: 100%;
   height: 100%;
@@ -139,15 +151,18 @@ body {
   -ms-overflow-style: none;
 }
 
+/* Hide the scrollbar in WebKit browsers such as Chrome and Safari. */
 .scroll-wrapper::-webkit-scrollbar {
   display: none;
 }
 
+/* Extra width creates enough horizontal distance to move through the gallery. */
 .scroll-content {
   width: 460vw;
   min-height: 100%;
 }
 
+/* Keep the visible 3D stage pinned to the viewport while its camera moves. */
 .depth-stage {
   position: fixed;
   inset: 0;
@@ -156,6 +171,7 @@ body {
   overflow: hidden;
 }
 
+/* The canvas sits above the background copy but below the header controls. */
 .gallery-canvas {
   position: relative !important;
   z-index: 1;
@@ -164,6 +180,7 @@ body {
   height: 100%;
 }
 
+/* Center the small descriptive line at the bottom of the viewport. */
 .name-wrap {
   position: absolute;
   inset: 0;
@@ -176,7 +193,7 @@ body {
 }
 
 .kicker {
-  margin: 0;
+  margin: 0 0 4rem;
   letter-spacing: 0.42em;
   font-size: clamp(0.62rem, 0.94vw, 0.9rem);
   font-weight: 500;
@@ -195,6 +212,7 @@ body {
     0 2px 5px rgba(0, 0, 0, 0.08);
 }
 
+/* On narrow screens, add more scroll distance for comfortable touch movement. */
 @media (max-width: 900px) {
   .scroll-content {
     width: 880vw;

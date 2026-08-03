@@ -4,6 +4,9 @@ import { DepthOfField, EffectComposer } from '@react-three/postprocessing'
 import Lenis from 'lenis'
 import * as THREE from 'three'
 
+// Every file in this list becomes one photograph in the 3D gallery.
+// Files in `public/` are available from the site's root, so `/images/...`
+// points to `public/images/...` without needing an import for every image.
 const IMAGES = [
   '/images/a_gaut_1780077945_3907899508835593186_26951807.jpg',
   '/images/a_gaut_1781549496_3920243768016469670_26951807.jpg',
@@ -20,10 +23,8 @@ const IMAGES = [
   '/images/a_gaut_1777037140_3882390757995115737_26951807.jpg',
   '/images/artofinteriors_1771942500_3839436776553652069_1150551359.jpg',
   '/images/fredericmagazine_1776193261_3875251897205151116_38402447939.jpg',
-  '/images/a_gaut_1780839727_3914289799339354428_26951807 (1).jpg',
   '/images/a_gaut_1781609517_3920747132776368764_26951807.jpg',
   '/images/a_gaut_1780915399_3914924581824052461_26951807.jpg',
-  '/images/a_gaut_1780839727_3914289799456809303_26951807 (1).jpg',
   '/images/a_gaut_1781259716_3917812920831015269_26951807.jpg',
   '/images/a_gaut_1780839727_3914289799339354428_26951807.jpg',
   '/images/fredericmagazine_1776193261_3875251898371201067_38402447939.jpg',
@@ -47,7 +48,6 @@ const IMAGES = [
   '/images/a_gaut_1780915399_3914924581790506941_26951807.jpg',
   '/images/a_gaut_1781549496_3920243768209391766_26951807.jpg',
   '/images/fredericmagazine_1776193261_3875251897632979906_38402447939.jpg',
-  '/images/a_gaut_1780760857_3913628186521272954_26951807 (1).jpg',
   '/images/a_gaut_1777037140_3882390769495870604_26951807.jpg',
   '/images/a_gaut_1781549496_3920243768268133075_26951807.jpg',
   '/images/a_gaut_1781190764_3917234509884294531_26951807.jpg',
@@ -58,6 +58,8 @@ const IMAGES = [
   '/images/artofinteriors_1771942500_3839436776553708653_1150551359.jpg',
 ]
 
+// Three.js uses its own 3D coordinate system. The camera sits at z = 12 and
+// looks toward the gallery. Each lane gives photos a height and 3D position.
 const CAMERA_Z = 12
 const LANE_STYLES = {
   1: { height: 3.05, y: 0.55, z: -3.1 },
@@ -65,19 +67,25 @@ const LANE_STYLES = {
   3: { height: 6.55, y: -0.35, z: 1.1 },
 }
 
+// Wrap a number back into the range from 0 up to `cycle`.
+// This is what lets the gallery repeat forever instead of reaching an end.
 function loopOffset(value, cycle) {
   if (!cycle) return 0
   return ((value % cycle) + cycle) % cycle
 }
 
+// Return a repeatable "random-looking" number between 0 and 1.
+// Using the image index means the layout stays the same after every refresh.
 function seededUnit(index, salt) {
   const raw = Math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
   return raw - Math.floor(raw)
 }
 
+// Calculate the lane, size, and 3D position of every gallery image.
 function createGalleryLayout() {
   const lanes = []
 
+  // Avoid putting two neighboring images in the same depth lane.
   IMAGES.forEach((_, index) => {
     const seededLane = Math.floor(seededUnit(index, 4.1) * 3) + 1
     const previousLane = lanes[index - 1] ?? 0
@@ -115,8 +123,11 @@ function createGalleryLayout() {
   return { items, cycleWidth: cursor }
 }
 
+// Render the photographs as flat Three.js meshes (3D rectangles).
+// This component also handles hover movement, selection, and focus animation.
 function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focusPointRef }) {
   const gl = useThree((state) => state.gl)
+  // useMemo saves calculated values so React does not recreate them on every render.
   const textureUrls = useMemo(
     () => IMAGES.map((src) => encodeURI(src.replace('/images/', '/images-webgl/'))),
     [],
@@ -126,6 +137,8 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
   const meshRefs = useRef(new Map())
   const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
+  // Make three copies of the gallery: one before, one at, and one after the
+  // original. Together with infinite scrolling, this hides the loop seam.
   const instances = useMemo(
     () => [-1, 0, 1].flatMap((copy) => layout.items.map((item) => ({
       ...item,
@@ -134,6 +147,8 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
     }))),
     [layout],
   )
+  // Each image texture gets its own simple, unlit material. An unlit material
+  // displays the photograph's original colors without requiring scene lights.
   const materials = useMemo(
     () => textures.map((texture) => new THREE.MeshBasicMaterial({
       map: texture,
@@ -144,6 +159,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
   )
 
   useEffect(() => {
+    // Improve texture sharpness when a photo is viewed at an angle.
     const anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 4)
     textures.forEach((texture) => {
       texture.colorSpace = THREE.SRGBColorSpace
@@ -151,6 +167,8 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
       texture.needsUpdate = true
     })
 
+    // React runs this cleanup when the gallery is removed. Disposing GPU
+    // resources prevents memory leaks during development and navigation.
     return () => {
       geometry.dispose()
       materials.forEach((material) => material.dispose())
@@ -165,6 +183,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
     focusAnimationActiveRef.current = true
   }, [selectedKey])
 
+  // useFrame runs once for every rendered animation frame.
   useFrame(({ camera }, delta) => {
     if (selectedKey === null && !focusAnimationActiveRef.current) return
 
@@ -184,13 +203,16 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
       let targetZ = instance.z
 
       if (selected && instance.textureIndex === selectedKey) {
+        // Bring every copy of the chosen photograph toward the camera.
         const cameraFov = THREE.MathUtils.degToRad(camera.fov)
         const focusDistance = instance.height / (2 * Math.tan(cameraFov / 2) * 0.88)
         targetY = 0
         targetZ = camera.position.z - focusDistance
       } else if (!selected && instance.key === hoveredKeyRef.current) {
+        // Nudge a hovered photo forward so it feels interactive.
         targetZ += 0.45
       } else if (selected) {
+        // Push nearby photographs aside to create space around the selection.
         const distance = loopOffset(instance.x - selected.x + layout.cycleWidth / 2, layout.cycleWidth)
           - layout.cycleWidth / 2
         const absoluteDistance = Math.abs(distance)
@@ -209,6 +231,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
         Math.abs(mesh.position.z - targetZ),
       )
 
+      // `damp` moves toward the target gradually, producing a smooth animation.
       mesh.position.x = THREE.MathUtils.damp(mesh.position.x, targetX, 7, delta)
       mesh.position.y = THREE.MathUtils.damp(mesh.position.y, targetY, 7, delta)
       mesh.position.z = THREE.MathUtils.damp(mesh.position.z, targetZ, 7, delta)
@@ -233,6 +256,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
 
   return (
     <group dispose={null}>
+      {/* Turn each calculated gallery item into a clickable 3D mesh. */}
       {instances.map((item) => (
         <mesh
           key={item.key}
@@ -246,6 +270,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
           scale={[item.width, item.height, 1]}
           onClick={(event) => {
             event.stopPropagation()
+            // Clicking the selected image again closes it.
             if (selectedKey === item.textureIndex) {
               setSelectedKey(null)
               return
@@ -273,6 +298,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
   )
 }
 
+// Keep the Three.js camera synchronized with the horizontal page scroll.
 function CameraRig({ layout, motionRef }) {
   const dollyRef = useRef(0)
 
@@ -283,6 +309,7 @@ function CameraRig({ layout, motionRef }) {
     const damping = targetDolly > dollyRef.current ? 9 : 3.25
 
     dollyRef.current = THREE.MathUtils.damp(dollyRef.current, targetDolly, damping, delta)
+    // Move sideways through the gallery and slightly backward during fast scrolls.
     camera.position.x = progress * layout.cycleWidth
     camera.position.z = CAMERA_Z - dollyRef.current * 0.2
   })
@@ -290,6 +317,7 @@ function CameraRig({ layout, motionRef }) {
   return null
 }
 
+// Blur photographs that are outside the current focus distance.
 function GalleryDepthOfField({ selectedKey, focusPointRef }) {
   const effectRef = useRef(null)
   const focusDistanceRef = useRef(CAMERA_Z - LANE_STYLES[3].z)
@@ -300,12 +328,14 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
     if (!effect) return
 
     if (!nearBlurConfiguredRef.current) {
+      // Keep close images crisp; only the deeper background should blur.
       effect.bokehNearBasePass.fullscreenMaterial.scale = 0
       effect.bokehNearFillPass.fullscreenMaterial.scale = 0
       nearBlurConfiguredRef.current = true
     }
 
     if (selectedKey !== null) {
+      // When an image is open, tell the effect to focus on that exact position.
       effect.target = focusPointRef.current
       focusDistanceRef.current = camera.position.distanceTo(focusPointRef.current)
       return
@@ -336,6 +366,7 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
   )
 }
 
+// Set up the React Three Fiber canvas and connect all 3D gallery pieces.
 function WebGLGallery({ motionRef }) {
   const layout = useMemo(() => createGalleryLayout(), [])
   const [selectedKey, setSelectedKey] = useState(null)
@@ -347,6 +378,7 @@ function WebGLGallery({ motionRef }) {
       camera={{ fov: 42, near: 0.1, far: 100, position: [0, 0, CAMERA_Z] }}
       dpr={[1, 1.25]}
       gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+      // Clicking empty space closes the currently selected photograph.
       onPointerMissed={() => setSelectedKey(null)}
     >
       <CameraRig layout={layout} motionRef={motionRef} />
@@ -364,7 +396,10 @@ function WebGLGallery({ motionRef }) {
   )
 }
 
+// This is the main page component. It combines the regular HTML header and
+// text with the WebGL gallery, then connects scrolling to the 3D camera.
 export default function Scene() {
+  // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
   const contentRef = useRef(null)
   const motionRef = useRef({ scroll: 0, limit: 1, velocity: 0, focusPlane: null })
@@ -374,6 +409,7 @@ export default function Scene() {
     const content = contentRef.current
     if (!wrapper || !content) return undefined
 
+    // Lenis turns wheel and touch input into smooth, horizontal, infinite scroll.
     const lenis = new Lenis({
       wrapper,
       content,
@@ -387,12 +423,14 @@ export default function Scene() {
     })
 
     const updateMotion = () => {
+      // Share Lenis values with the 3D animation loop through `motionRef`.
       motionRef.current.scroll = typeof lenis.scroll === 'number' ? lenis.scroll : 0
       motionRef.current.limit = typeof lenis.limit === 'number' ? lenis.limit : 1
       motionRef.current.velocity = Number.isFinite(lenis.velocity) ? lenis.velocity : 0
     }
 
     motionRef.current.focusPlane = (worldX, cycleWidth) => {
+      // Convert a photograph's 3D x position into the matching scroll position.
       const targetProgress = loopOffset(worldX, cycleWidth) / cycleWidth
       lenis.scrollTo(targetProgress * lenis.limit, {
         duration: 1.1,
@@ -402,6 +440,7 @@ export default function Scene() {
 
     lenis.on('scroll', updateMotion)
 
+    // requestAnimationFrame asks the browser to update just before each repaint.
     let rafId = 0
     const raf = (time) => {
       lenis.raf(time)
@@ -411,6 +450,7 @@ export default function Scene() {
 
     rafId = requestAnimationFrame(raf)
 
+    // Stop animation work if this page is ever removed from the screen.
     return () => {
       cancelAnimationFrame(rafId)
       motionRef.current.focusPlane = null
@@ -420,8 +460,10 @@ export default function Scene() {
 
   return (
     <main className="studio-shell">
+      {/* Decorative texture; aria-hidden keeps it out of screen readers. */}
       <div className="studio-noise" aria-hidden="true" />
-      <p className="brand-signature">ADRIAN GAUT</p>
+      <h1 className="brand-signature">ADRIAN GAUT</h1>
+      {/* Standard HTML links sit above the 3D canvas and remain easy to use. */}
       <nav className="header-links" aria-label="Contact and social links">
         <a className="contact-link" href="mailto:adrian@agaut.com">
           Contact
@@ -440,12 +482,12 @@ export default function Scene() {
           </svg>
         </a>
       </nav>
+      {/* Lenis watches this wrapper and moves through the extra-wide content. */}
       <div className="scroll-wrapper" ref={wrapperRef}>
         <section className="scroll-content" ref={contentRef}>
           <div className="depth-stage">
             <div className="name-wrap">
               <p className="kicker">places spaces &amp; things</p>
-              <h1 className="name">a. gaut</h1>
             </div>
 
             <WebGLGallery motionRef={motionRef} />
