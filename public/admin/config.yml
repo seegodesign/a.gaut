@@ -15,36 +15,116 @@ media_libraries:
     config:
       slugify_filename: true
 
+singletons:
+  - name: site
+    label: Site Identity
+    icon: settings
+    file: /src/content/site.json
+    format: json
+    fields:
+      - name: siteTitle
+        label: Site Title
+        widget: string
+        required: true
+        hint: The title of the site, shown in the browser tab and search results.
+      - name: subhead
+        label: Subhead
+        widget: string
+        required: false
+        hint: The small line of text shown near the bottom of the gallery.
+      - name: instagramUrl
+        label: Instagram URL
+        widget: string
+        required: true
+        default: https://www.instagram.com/a_gaut
+        hint: The full URL opened by the Instagram icon in the site header.
+
+  - name: metadata
+    label: Search & Sharing
+    icon: public
+    file: /src/content/seo-social.json
+    format: json
+    fields:
+      - name: seoTitle
+        label: SEO Title
+        widget: string
+        required: false
+        hint: The homepage title shown in browser tabs, search results, and social previews. Defaults to Site Title.
+      - name: seoDescription
+        label: SEO Description
+        widget: text
+        required: false
+        hint: A concise homepage summary for search engines and social previews. Aim for about 150 characters.
+      - name: socialImage
+        label: Social Share Image
+        widget: image
+        required: false
+        hint: Optional image used when the site is shared. A 1200 × 630 JPG or PNG works best.
+      - name: socialImageAlt
+        label: Social Image Description
+        widget: string
+        required: false
+        hint: A short description of the social share image for accessibility.
+
+  - name: contact_page
+    label: Contact Page
+    icon: contact_page
+    file: /src/content/contact.json
+    format: json
+    fields:
+      - name: representationPrefix
+        label: Representation Prefix
+        widget: string
+        required: true
+        default: Represented by
+        hint: Text shown immediately before the linked agency name.
+      - name: representationName
+        label: Agency Name
+        widget: string
+        required: true
+        default: EDGE REPS
+      - name: representationUrl
+        label: Agency URL
+        widget: string
+        required: true
+        default: http://www.edgereps.com/
+      - name: email
+        label: Email Address
+        widget: string
+        required: true
+        default: adrian@agaut.com
+
 collections:
-  - name: site_content
-    label: Site Content
+  - name: gallery
+    label: Gallery
     icon: photo_library
     files:
-      - name: settings
-        label: Site Settings
-        file: /src/content/settings.json
+      - name: images
+        label: Gallery Images
+        file: /src/content/gallery.json
         format: json
         fields:
-          - name: siteTitle
-            label: Site Title
-            widget: string
-            required: true
-            hint: The title of the site, shown in the browser tab and search results.
-          - name: subhead
-            label: Subhead
-            widget: string
-            required: false
-            hint: The small line of text shown near the bottom of the gallery.
-          - name: seoTitle
-            label: SEO Title
-            widget: string
-            required: false
-            hint: The homepage title shown in browser tabs, search results, and social previews. Defaults to Site Title.
-          - name: seoDescription
-            label: SEO Description
-            widget: text
-            required: false
-            hint: A concise homepage summary for search engines and social previews. Aim for about 150 characters.
+          - name: images
+            label: Gallery Images
+            label_singular: Image
+            widget: list
+            min: 1
+            collapsed: true
+            thumbnail: image
+            fields:
+              - name: image
+                label: Image
+                widget: image
+              - name: caption
+                label: Project Caption
+                widget: string
+                required: false
+                hint: Optional text shown near the bottom edge when this image is opened.
+      - name: behavior
+        label: Gallery Behavior
+        file: /src/content/gallery-settings.json
+        format: json
+        fields:
           - name: randomizePhotoOrder
             label: Randomize Photo Order
             widget: boolean
@@ -85,67 +165,3 @@ collections:
             default: true
             required: false
             hint: Soften photos slightly during fast scrolling to make their movement feel smoother.
-          - name: socialImage
-            label: Social Share Image
-            widget: image
-            required: false
-            hint: Optional image used when the site is shared. A 1200 × 630 JPG or PNG works best.
-          - name: socialImageAlt
-            label: Social Image Description
-            widget: string
-            required: false
-            hint: A short description of the social share image for accessibility.
-          - name: instagramUrl
-            label: Instagram URL
-            widget: string
-            required: true
-            default: https://www.instagram.com/a_gaut
-            hint: The full URL opened by the Instagram icon in the site header.
-          - name: contact
-            label: Contact Page
-            widget: object
-            required: true
-            collapsed: true
-            fields:
-              - name: representationPrefix
-                label: Representation Prefix
-                widget: string
-                required: true
-                default: Represented by
-                hint: Text shown immediately before the linked agency name.
-              - name: representationName
-                label: Agency Name
-                widget: string
-                required: true
-                default: EDGE REPS
-              - name: representationUrl
-                label: Agency URL
-                widget: string
-                required: true
-                default: http://www.edgereps.com/
-              - name: email
-                label: Email Address
-                widget: string
-                required: true
-                default: adrian@agaut.com
-      - name: gallery
-        label: Gallery
-        file: /src/content/gallery.json
-        format: json
-        fields:
-          - name: images
-            label: Gallery Images
-            label_singular: Image
-            widget: list
-            min: 1
-            collapsed: true
-            thumbnail: image
-            fields:
-              - name: image
-                label: Image
-                widget: image
-              - name: caption
-                label: Project Caption
-                widget: string
-                required: false
-                hint: Optional text shown near the bottom edge when this image is opened.

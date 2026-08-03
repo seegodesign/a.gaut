@@ -264,11 +264,21 @@ body {
 .scroll-wrapper {
   width: 100%;
   height: 100%;
+  cursor: grab;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  user-select: none;
+}
+
+.scroll-wrapper.is-image-hovered {
+  cursor: pointer;
+}
+
+.scroll-wrapper.is-dragging {
+  cursor: grabbing;
 }
 
 /* Hide the scrollbar in WebKit browsers such as Chrome and Safari. */

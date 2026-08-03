@@ -8,7 +8,7 @@ the interactive WebGL gallery in `src/components/Scene.jsx`.
 
 Content is managed through Sveltia CMS. Its schema lives in
 `public/admin/config.yml`, and its committed data lives in
-`src/content/settings.json` and `src/content/gallery.json`.
+the focused JSON files under `src/content/`.
 
 ## Development
 
@@ -38,7 +38,7 @@ Content is managed through Sveltia CMS. Its schema lives in
 When adding or changing a site setting, update every relevant layer:
 
 1. Define the field in `public/admin/config.yml`.
-2. Add a representative value to `src/content/settings.json`.
+2. Add a representative value to the matching JSON file in `src/content/`.
 3. Read it in the relevant Astro page.
 4. Pass it through `src/App.jsx` and React components as needed.
 5. Update `README.md` when the documented content model changes materially.

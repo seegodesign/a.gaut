@@ -2,20 +2,22 @@
 import { ClientRouter, fade } from 'astro:transitions'
 import App from '../App.jsx'
 import gallery from '../content/gallery.json'
-import settings from '../content/settings.json'
+import gallerySettings from '../content/gallery-settings.json'
+import seoSocial from '../content/seo-social.json'
+import site from '../content/site.json'
 import { getOptimizedUploadPath } from '../lib/imagePaths.js'
 import '../styles.css'
 
-const siteTitle = settings.siteTitle?.trim() || 'Adrian Gaut'
+const siteTitle = site.siteTitle?.trim() || 'Adrian Gaut'
 // Editors can tune search and sharing copy without changing the visible name.
-const title = settings.seoTitle?.trim() || siteTitle
-const description = settings.seoDescription?.trim()
+const title = seoSocial.seoTitle?.trim() || siteTitle
+const description = seoSocial.seoDescription?.trim()
   || 'The photography portfolio of Adrian Gaut.'
-const socialImageAlt = settings.socialImageAlt?.trim()
+const socialImageAlt = seoSocial.socialImageAlt?.trim()
   || 'Selected work by Adrian Gaut'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
-const socialImageUrl = settings.socialImage
-  ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
+const socialImageUrl = seoSocial.socialImage
+  ? new URL(seoSocial.socialImage, Astro.site ?? Astro.url.origin)
   : null
 // Replace only the browser-facing gallery URL. Sveltia's JSON continues to
 // point at the original upload, so its media library remains fully editable.
@@ -23,8 +25,8 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
   ...entry,
   image: getOptimizedUploadPath(entry.image),
 }))
-const instagramUrl = settings.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'
-const subhead = settings.subhead?.trim() || 'places spaces & things'
+const instagramUrl = site.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'
+const subhead = site.subhead?.trim() || 'places spaces & things'
 const introStartDelay = 180
 const introCharacterDelay = 55
 const introCharacterDuration = 480
@@ -122,12 +124,12 @@ const introDuration = introStartDelay
       <App
         images={optimizedGalleryImages}
         introDuration={introDuration}
-        randomizePhotoOrder={settings.randomizePhotoOrder}
-        enableAutoScroll={settings.enableAutoScroll === true}
-        autoScrollSpeed={settings.autoScrollSpeed}
-        enablePhotoFloating={settings.enablePhotoFloating !== false}
-        enableDepthOfField={settings.enableDepthOfField !== false}
-        enableScrollMotionBlur={settings.enableScrollMotionBlur !== false}
+        randomizePhotoOrder={gallerySettings.randomizePhotoOrder}
+        enableAutoScroll={gallerySettings.enableAutoScroll === true}
+        autoScrollSpeed={gallerySettings.autoScrollSpeed}
+        enablePhotoFloating={gallerySettings.enablePhotoFloating !== false}
+        enableDepthOfField={gallerySettings.enableDepthOfField !== false}
+        enableScrollMotionBlur={gallerySettings.enableScrollMotionBlur !== false}
         client:only="react"
       />
     </main>

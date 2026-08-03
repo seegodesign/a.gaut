@@ -33,12 +33,18 @@ Sveltia CMS is configured in `public/admin/config.yml` and stores content as
 files in the Git repository. Changes made in the CMS are committed to the
 `main` branch and should trigger a new site deployment.
 
-The two editable content files are:
+CMS content is split by responsibility:
 
+- `src/content/site.json`: site title, gallery subhead, and Instagram URL.
 - `src/content/gallery.json`: gallery images, order, and optional captions.
-- `src/content/settings.json`: site title, gallery subhead, SEO title and
-  description, randomized ordering, gallery effects, Instagram URL,
-  contact-page content, and social sharing metadata.
+- `src/content/gallery-settings.json`: gallery ordering, auto-scroll, and
+  visual effects.
+- `src/content/seo-social.json`: search metadata and social sharing image.
+- `src/content/contact.json`: representation and contact-page details.
+
+In Sveltia, Site Identity, Search & Sharing, and Contact Page are singleton
+pages that open directly from the sidebar. Gallery remains a collection because
+its image editor and behavior settings are separate files.
 
 Original uploads must remain in `public/uploads`. Sveltia uses that directory
 as its media library and saves paths such as `/uploads/photo.jpg` in the JSON.
@@ -78,6 +84,7 @@ and an image selected with the keyboard is requested immediately.
 ## Gallery controls
 
 - Scroll, swipe, or trackpad horizontally to move through the gallery.
+- Click and drag to scrub the gallery; a fast release throws it with momentum.
 - Click or tap a photograph to open it and reveal its optional caption.
 - Click the active photograph or empty space to close it.
 - Press `Left Arrow` or `Right Arrow` to move between photographs.

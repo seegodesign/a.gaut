@@ -1,22 +1,23 @@
 ---
 import { ClientRouter, fade } from 'astro:transitions'
-import settings from '../content/settings.json'
+import contact from '../content/contact.json'
+import seoSocial from '../content/seo-social.json'
+import site from '../content/site.json'
 import '../styles.css'
 
-const siteTitle = settings.siteTitle || 'Adrian Gaut'
+const siteTitle = site.siteTitle || 'Adrian Gaut'
 const title = `Contact — ${siteTitle}`
 const description = 'Contact photographer Adrian Gaut and his representation.'
-const socialImageAlt = settings.socialImageAlt?.trim()
+const socialImageAlt = seoSocial.socialImageAlt?.trim()
   || 'Selected work by Adrian Gaut'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
-const socialImageUrl = settings.socialImage
-  ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
+const socialImageUrl = seoSocial.socialImage
+  ? new URL(seoSocial.socialImage, Astro.site ?? Astro.url.origin)
   : null
-// Contact copy is managed alongside the other global Site Settings in Sveltia.
-const representationPrefix = settings.contact?.representationPrefix || 'Represented by'
-const representationName = settings.contact?.representationName || 'EDGE REPS'
-const representationUrl = settings.contact?.representationUrl || 'http://www.edgereps.com/'
-const contactEmail = settings.contact?.email || 'adrian@agaut.com'
+const representationPrefix = contact.representationPrefix || 'Represented by'
+const representationName = contact.representationName || 'EDGE REPS'
+const representationUrl = contact.representationUrl || 'http://www.edgereps.com/'
+const contactEmail = contact.email || 'adrian@agaut.com'
 ---
 
 <!doctype html>

@@ -37,6 +37,10 @@ const AUTO_SCROLL_MANUAL_PAUSE_MS = 1200
 const PRELOAD_INDICATOR_FAILSAFE_MS = 2500
 const SMOOTH_SCROLL_LERP = 0.045
 const AUTO_SCROLL_POINTER_DEAD_ZONE = 0.08
+const DRAG_ACTIVATION_DISTANCE = 5
+const DRAG_SCROLL_MULTIPLIER = 0.35
+const DRAG_INERTIA_DURATION_MS = 650
+const DRAG_MAX_THROW_VIEWPORTS = 1.5
 // Begin downloading photographs just outside the camera view. This gives the
 // browser time to decode the next few images without requesting the whole CMS
 // library when the page first opens.
@@ -367,6 +371,7 @@ function GalleryPlanes({
 
   useEffect(() => () => {
     document.body.style.cursor = ''
+    document.querySelector('.scroll-wrapper')?.classList.remove('is-image-hovered')
   }, [])
 
   useEffect(() => {
@@ -588,6 +593,8 @@ function GalleryPlanes({
           scale={[item.width, item.height, 1]}
           onClick={(event) => {
             event.stopPropagation()
+            if (motionRef.current.suppressNextClick) return
+
             // Clicking the selected image again closes it.
             if (selectedKey === item.textureIndex) {
               setSelectedKey(null)
@@ -601,14 +608,14 @@ function GalleryPlanes({
             event.stopPropagation()
             hoveredKeyRef.current = item.key
             focusAnimationActiveRef.current = true
-            document.body.style.cursor = 'pointer'
+            document.querySelector('.scroll-wrapper')?.classList.add('is-image-hovered')
           }}
           onPointerLeave={() => {
             if (hoveredKeyRef.current === item.key) {
               hoveredKeyRef.current = null
               focusAnimationActiveRef.current = true
+              document.querySelector('.scroll-wrapper')?.classList.remove('is-image-hovered')
             }
-            document.body.style.cursor = ''
           }}
         />
       ))}
@@ -778,7 +785,9 @@ function WebGLGallery({
         powerPreference: 'high-performance',
       }}
       // Clicking empty space closes the currently selected photograph.
-      onPointerMissed={() => setSelectedKey(null)}
+      onPointerMissed={() => {
+        if (!motionRef.current.suppressNextClick) setSelectedKey(null)
+      }}
     >
       <CanvasSizeSync />
       <CameraRig layout={layout} motionRef={motionRef} reducedMotion={reducedMotion} />
@@ -835,6 +844,8 @@ export default function Scene({
     focusPlane: null,
     clearSelection: null,
     autoScrollPaused: false,
+    isDragging: false,
+    suppressNextClick: false,
   })
   const [activeCaption, setActiveCaption] = useState('')
   const reducedMotion = usePrefersReducedMotion()
@@ -945,6 +956,15 @@ export default function Scene({
     // has settled. These events do not run for programmatic camera centering.
     let autoScrollResumeAt = 0
     let pointerScrollFactor = 1
+    let suppressClickTimer = 0
+    const dragState = {
+      pointerId: null,
+      startX: 0,
+      lastX: 0,
+      lastTime: 0,
+      velocity: 0,
+      dragged: false,
+    }
     const handleManualScroll = () => {
       motionRef.current.clearSelection?.()
       autoScrollResumeAt = performance.now() + AUTO_SCROLL_MANUAL_PAUSE_MS
@@ -976,8 +996,108 @@ export default function Scene({
     const handlePointerLeave = () => {
       pointerScrollFactor = 0
     }
+    const handleDragStart = (event) => {
+      if (
+        event.pointerType === 'touch'
+        || event.isPrimary === false
+        || event.button !== 0
+      ) return
+
+      dragState.pointerId = event.pointerId
+      dragState.startX = event.clientX
+      dragState.lastX = event.clientX
+      dragState.lastTime = event.timeStamp
+      dragState.velocity = 0
+      dragState.dragged = false
+      autoScrollResumeAt = performance.now() + AUTO_SCROLL_MANUAL_PAUSE_MS
+
+      // Begin the grab from the exact rendered position, without inheriting a
+      // stale manual-scroll target from an earlier wheel or throw animation.
+      lenis.scrollTo(lenis.scroll, { immediate: true })
+    }
+    const handleDragMove = (event) => {
+      if (event.pointerId !== dragState.pointerId) return
+
+      const deltaX = event.clientX - dragState.lastX
+      const elapsed = Math.max(event.timeStamp - dragState.lastTime, 1)
+      const totalDistance = event.clientX - dragState.startX
+
+      dragState.lastX = event.clientX
+      dragState.lastTime = event.timeStamp
+
+      if (!dragState.dragged) {
+        if (Math.abs(totalDistance) < DRAG_ACTIVATION_DISTANCE) return
+
+        dragState.dragged = true
+        motionRef.current.isDragging = true
+        motionRef.current.clearSelection?.()
+        wrapper.setPointerCapture(event.pointerId)
+        wrapper.classList.add('is-dragging')
+        document.body.style.cursor = ''
+      }
+
+      event.preventDefault()
+      const scrollDelta = -deltaX * DRAG_SCROLL_MULTIPLIER
+      const instantaneousVelocity = scrollDelta / elapsed
+      // Favor recent movement so slowing before release produces less inertia.
+      dragState.velocity = THREE.MathUtils.lerp(
+        dragState.velocity,
+        instantaneousVelocity,
+        0.45,
+      )
+      lenis.scrollTo(lenis.targetScroll + scrollDelta, {
+        programmatic: false,
+        lerp: 1,
+      })
+    }
+    const finishDrag = (event, allowInertia) => {
+      if (event.pointerId !== dragState.pointerId) return
+
+      if (wrapper.hasPointerCapture(event.pointerId)) {
+        wrapper.releasePointerCapture(event.pointerId)
+      }
+
+      if (dragState.dragged) {
+        const releaseDelay = Math.max(event.timeStamp - dragState.lastTime, 0)
+        const releaseVelocity = dragState.velocity * Math.exp(-releaseDelay / 90)
+        const maximumThrow = wrapper.clientWidth * DRAG_MAX_THROW_VIEWPORTS
+        const throwDistance = THREE.MathUtils.clamp(
+          releaseVelocity * DRAG_INERTIA_DURATION_MS,
+          -maximumThrow,
+          maximumThrow,
+        )
+
+        if (allowInertia && !reducedMotion && Math.abs(throwDistance) > 1) {
+          lenis.scrollTo(lenis.targetScroll + throwDistance, {
+            programmatic: false,
+            lerp: SMOOTH_SCROLL_LERP,
+          })
+        }
+
+        // Native click follows pointerup in the same task. Clear this flag on
+        // the next task so the drag cannot accidentally select a photograph.
+        motionRef.current.suppressNextClick = true
+        window.clearTimeout(suppressClickTimer)
+        suppressClickTimer = window.setTimeout(() => {
+          motionRef.current.suppressNextClick = false
+        }, 0)
+      }
+
+      autoScrollResumeAt = performance.now() + AUTO_SCROLL_MANUAL_PAUSE_MS
+      dragState.pointerId = null
+      dragState.dragged = false
+      dragState.velocity = 0
+      motionRef.current.isDragging = false
+      wrapper.classList.remove('is-dragging')
+    }
+    const handleDragEnd = (event) => finishDrag(event, true)
+    const handleDragCancel = (event) => finishDrag(event, false)
     wrapper.addEventListener('wheel', handleManualScroll, { passive: true })
     wrapper.addEventListener('touchmove', handleManualScroll, { passive: true })
+    wrapper.addEventListener('pointerdown', handleDragStart)
+    wrapper.addEventListener('pointermove', handleDragMove)
+    wrapper.addEventListener('pointerup', handleDragEnd)
+    wrapper.addEventListener('pointercancel', handleDragCancel)
     window.addEventListener('pointermove', handlePointerMove, { passive: true })
     document.documentElement.addEventListener('mouseleave', handlePointerLeave, { passive: true })
 
@@ -1031,6 +1151,7 @@ export default function Scene({
         enableAutoScroll
         && !reducedMotion
         && !motionRef.current.autoScrollPaused
+        && dragState.pointerId === null
         && time >= autoScrollResumeAt
         && lenis.limit > 0
       ) {
@@ -1058,8 +1179,15 @@ export default function Scene({
       cancelAnimationFrame(layoutSyncFrame)
       wrapper.removeEventListener('wheel', handleManualScroll)
       wrapper.removeEventListener('touchmove', handleManualScroll)
+      wrapper.removeEventListener('pointerdown', handleDragStart)
+      wrapper.removeEventListener('pointermove', handleDragMove)
+      wrapper.removeEventListener('pointerup', handleDragEnd)
+      wrapper.removeEventListener('pointercancel', handleDragCancel)
       window.removeEventListener('pointermove', handlePointerMove)
       document.documentElement.removeEventListener('mouseleave', handlePointerLeave)
+      window.clearTimeout(suppressClickTimer)
+      motionRef.current.isDragging = false
+      motionRef.current.suppressNextClick = false
       motionRef.current.focusPlane = null
       lenis.destroy()
     }
