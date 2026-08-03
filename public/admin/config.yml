@@ -67,6 +67,33 @@ collections:
             required: true
             default: https://www.instagram.com/a_gaut
             hint: The full URL opened by the Instagram icon in the site header.
+          - name: contact
+            label: Contact Page
+            widget: object
+            required: true
+            collapsed: true
+            fields:
+              - name: representationPrefix
+                label: Representation Prefix
+                widget: string
+                required: true
+                default: Represented by
+                hint: Text shown immediately before the linked agency name.
+              - name: representationName
+                label: Agency Name
+                widget: string
+                required: true
+                default: EDGE REPS
+              - name: representationUrl
+                label: Agency URL
+                widget: string
+                required: true
+                default: http://www.edgereps.com/
+              - name: email
+                label: Email Address
+                widget: string
+                required: true
+                default: adrian@agaut.com
       - name: gallery
         label: Gallery
         file: /src/content/gallery.json

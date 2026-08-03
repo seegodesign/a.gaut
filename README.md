@@ -37,7 +37,8 @@ The two editable content files are:
 
 - `src/content/gallery.json`: gallery images, order, and optional captions.
 - `src/content/settings.json`: site title, gallery subhead, SEO title and
-  description, randomized ordering, Instagram URL, and social sharing metadata.
+  description, randomized ordering, Instagram URL, contact-page content, and
+  social sharing metadata.
 
 Original uploads must remain in `public/uploads`. Sveltia uses that directory
 as its media library and saves paths such as `/uploads/photo.jpg` in the JSON.

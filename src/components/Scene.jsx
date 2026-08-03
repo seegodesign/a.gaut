@@ -9,8 +9,8 @@ import * as THREE from 'three'
 const CAMERA_Z = 12
 const LANE_STYLES = {
   1: { height: 3.05, y: 0.55, z: -3.1 },
-  2: { height: 3.75, y: 0.05, z: -1.05 },
-  3: { height: 6.55, y: -0.35, z: 1.1 },
+  2: { height: 3.75, y: 0.05, z: -0.5 },
+  3: { height: 6.55, y: -0.35, z: 0.75 },
 }
 const DEEPEST_LANE_Z = Math.min(...Object.values(LANE_STYLES).map(({ z }) => z))
 // Shift the repeating strip left so its first foreground photo is already
@@ -514,18 +514,10 @@ function CameraRig({ layout, motionRef, reducedMotion }) {
 function GalleryDepthOfField({ selectedKey, focusPointRef, reducedMotion }) {
   const effectRef = useRef(null)
   const focusDistanceRef = useRef(CAMERA_Z - LANE_STYLES[3].z)
-  const nearBlurConfiguredRef = useRef(false)
 
   useFrame(({ camera }, delta) => {
     const effect = effectRef.current
     if (!effect) return
-
-    if (!nearBlurConfiguredRef.current) {
-      // Keep close images crisp; only the deeper background should blur.
-      effect.bokehNearBasePass.fullscreenMaterial.scale = 0
-      effect.bokehNearFillPass.fullscreenMaterial.scale = 0
-      nearBlurConfiguredRef.current = true
-    }
 
     // A tighter range makes the background, which also moves farther away,
     // noticeably blurrier while a photograph is selected.

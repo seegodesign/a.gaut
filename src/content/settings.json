@@ -6,5 +6,11 @@
   "randomizePhotoOrder": true,
   "socialImage": "",
   "socialImageAlt": "Selected work by Adrian Gaut",
-  "instagramUrl": "https://www.instagram.com/a_gaut"
+  "instagramUrl": "https://www.instagram.com/a_gaut",
+  "contact": {
+    "representationPrefix": "Represented by",
+    "representationName": "EDGE REPS",
+    "representationUrl": "http://www.edgereps.com/",
+    "email": "adrian@agaut.com"
+  }
 }

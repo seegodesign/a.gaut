@@ -12,6 +12,11 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 const socialImageUrl = settings.socialImage
   ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
   : null
+// Contact copy is managed alongside the other global Site Settings in Sveltia.
+const representationPrefix = settings.contact?.representationPrefix || 'Represented by'
+const representationName = settings.contact?.representationName || 'EDGE REPS'
+const representationUrl = settings.contact?.representationUrl || 'http://www.edgereps.com/'
+const contactEmail = settings.contact?.email || 'adrian@agaut.com'
 ---
 
 <!doctype html>
@@ -49,9 +54,9 @@ const socialImageUrl = settings.socialImage
 
       <div class="contact-copy">
         <p>
-          Represented by&nbsp;<a href="http://www.edgereps.com/">EDGE REPS</a>
+          {representationPrefix}&nbsp;<a href={representationUrl}>{representationName}</a>
         </p>
-        <p><a href="mailto:adrian@agaut.com">adrian@agaut.com</a></p>
+        <p><a href={`mailto:${contactEmail}`}>{contactEmail}</a></p>
       </div>
     </main>
   </body>
