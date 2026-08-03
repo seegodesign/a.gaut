@@ -184,15 +184,16 @@ function GalleryPlanes({
     }))),
     [layout],
   )
-  // Use Three.js's opaque dithered reveal instead of transparent blending.
-  // Pixels resolve progressively while every plane keeps correct 3D depth.
+  // Start loaded photographs transparent, but keep depth writing enabled so
+  // overlapping 3D planes do not blend through one another like glass.
   const materials = useMemo(
     () => images.map(() => new THREE.MeshBasicMaterial({
-      alphaHash: true,
       color: '#ffffff',
+      depthWrite: true,
       opacity: 0,
       side: THREE.FrontSide,
       toneMapped: false,
+      transparent: true,
       visible: false,
     })),
     [images],
@@ -287,8 +288,7 @@ function GalleryPlanes({
       }
     })
 
-    // Reveal decoded photographs with an opaque screen-door dissolve. Unlike
-    // transparent blending, this cannot turn overlapping planes into glass.
+    // Fade decoded photographs in smoothly without causing a React render.
     materials.forEach((material, textureIndex) => {
       if (!textureState.loaded.has(textureIndex)) return
 
@@ -296,10 +296,10 @@ function GalleryPlanes({
         ? 1
         : THREE.MathUtils.damp(material.opacity, 1, 7, delta)
 
-      // Return to the simplest solid material after the short reveal finishes.
-      if (material.opacity > 0.995 && material.alphaHash) {
+      // Return to the simplest solid material after the short fade finishes.
+      if (material.opacity > 0.995 && material.transparent) {
         material.opacity = 1
-        material.alphaHash = false
+        material.transparent = false
         material.needsUpdate = true
       }
     })
