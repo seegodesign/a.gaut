@@ -4,60 +4,6 @@ import { DepthOfField, EffectComposer } from '@react-three/postprocessing'
 import Lenis from 'lenis'
 import * as THREE from 'three'
 
-// Every file in this list becomes one photograph in the 3D gallery.
-// Files in `public/` are available from the site's root, so `/images/...`
-// points to `public/images/...` without needing an import for every image.
-const IMAGES = [
-  '/images/a_gaut_1780077945_3907899508835593186_26951807.jpg',
-  '/images/a_gaut_1781549496_3920243768016469670_26951807.jpg',
-  '/images/a_gaut_1781695152_3921465621796176075_26951807.jpg',
-  '/images/artofinteriors_1771942500_3839436776553667630_1150551359.jpg',
-  '/images/a_gaut_1781549496_3920243768469434518_26951807.jpg',
-  '/images/artofinteriors_1771942500_3839436776545268050_1150551359.jpg',
-  '/images/a_gaut_1777037140_3882390767105130799_26951807.jpg',
-  '/images/a_gaut_1780696704_3913090035012860252_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390772406712841_26951807.jpg',
-  '/images/artofinteriors_1771942500_3839436776629202894_1150551359.jpg',
-  '/images/a_gaut_1781190764_3917234510026958899_26951807.jpg',
-  '/images/a_gaut_1781259716_3917812920738724540_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390757995115737_26951807.jpg',
-  '/images/artofinteriors_1771942500_3839436776553652069_1150551359.jpg',
-  '/images/fredericmagazine_1776193261_3875251897205151116_38402447939.jpg',
-  '/images/a_gaut_1781609517_3920747132776368764_26951807.jpg',
-  '/images/a_gaut_1780915399_3914924581824052461_26951807.jpg',
-  '/images/a_gaut_1781259716_3917812920831015269_26951807.jpg',
-  '/images/a_gaut_1780839727_3914289799339354428_26951807.jpg',
-  '/images/fredericmagazine_1776193261_3875251898371201067_38402447939.jpg',
-  '/images/a_gaut_1780077945_3907899508776880172_26951807.jpg',
-  '/images/a_gaut_1780760857_3913628186521272954_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390750713786725_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390764479496888_26951807.jpg',
-  '/images/a_gaut_1781609517_3920747050702407619_26951807.jpg',
-  '/images/a_gaut_1781259716_3917812920738773998_26951807.jpg',
-  '/images/a_gaut_1780915399_3914924581840839282_26951807.jpg',
-  '/images/a_gaut_1781695152_3921465621066363513_26951807.jpg',
-  '/images/a_gaut_1781549496_3920243768209412511_26951807.jpg',
-  '/images/a_gaut_1780696704_3913090034400437028_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390755344295393_26951807.jpg',
-  '/images/a_gaut_1780839727_3914289799456809303_26951807.jpg',
-  '/images/a_gaut_1781088567_3916377039724479385_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390762055141918_26951807.jpg',
-  '/images/a_gaut_1781088567_3916377035848811998_26951807.jpg',
-  '/images/a_gaut_1781259716_3917812920755496128_26951807.jpg',
-  '/images/a_gaut_1780696704_3913090034551432225_26951807.jpg',
-  '/images/a_gaut_1780915399_3914924581790506941_26951807.jpg',
-  '/images/a_gaut_1781549496_3920243768209391766_26951807.jpg',
-  '/images/fredericmagazine_1776193261_3875251897632979906_38402447939.jpg',
-  '/images/a_gaut_1777037140_3882390769495870604_26951807.jpg',
-  '/images/a_gaut_1781549496_3920243768268133075_26951807.jpg',
-  '/images/a_gaut_1781190764_3917234509884294531_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390759521834099_26951807.jpg',
-  '/images/a_gaut_1781695152_3921465621066399174_26951807.jpg',
-  '/images/a_gaut_1777037140_3882390775468559435_26951807.jpg',
-  '/images/a_gaut_1780077945_3907899508802050894_26951807.jpg',
-  '/images/artofinteriors_1771942500_3839436776553708653_1150551359.jpg',
-]
-
 // Three.js uses its own 3D coordinate system. The camera sits at z = 12 and
 // looks toward the gallery. Each lane gives photos a height and 3D position.
 const CAMERA_Z = 12
@@ -66,6 +12,9 @@ const LANE_STYLES = {
   2: { height: 3.75, y: 0.05, z: -1.05 },
   3: { height: 6.55, y: -0.35, z: 1.1 },
 }
+// Shift the repeating strip left so its first foreground photo is already
+// visible on the left side when the camera begins at x = 0.
+const GALLERY_START_X = -5.75
 
 // Wrap a number back into the range from 0 up to `cycle`.
 // This is what lets the gallery repeat forever instead of reaching an end.
@@ -81,12 +30,51 @@ function seededUnit(index, salt) {
   return raw - Math.floor(raw)
 }
 
+// Create a shuffled copy without changing the curated array saved by the CMS.
+// This is the Fisher-Yates shuffle: each image swaps with a random earlier one.
+function shuffleImages(images) {
+  const shuffled = [...images]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]]
+  }
+
+  return shuffled
+}
+
+// Follow the visitor's operating-system accessibility preference and update
+// immediately if they change it while the site is open.
+function usePrefersReducedMotion() {
+  const [reducedMotion, setReducedMotion] = useState(() => (
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false
+  ))
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const updatePreference = (event) => setReducedMotion(event.matches)
+
+    mediaQuery.addEventListener('change', updatePreference)
+    return () => mediaQuery.removeEventListener('change', updatePreference)
+  }, [])
+
+  return reducedMotion
+}
+
 // Calculate the lane, size, and 3D position of every gallery image.
-function createGalleryLayout() {
+function createGalleryLayout(images) {
   const lanes = []
 
   // Avoid putting two neighboring images in the same depth lane.
-  IMAGES.forEach((_, index) => {
+  images.forEach((_, index) => {
+    // Always begin with a large foreground image on the left edge.
+    if (index === 0) {
+      lanes.push(3)
+      return
+    }
+
     const seededLane = Math.floor(seededUnit(index, 4.1) * 3) + 1
     const previousLane = lanes[index - 1] ?? 0
     const options = [1, 2, 3].filter((lane) => lane !== previousLane)
@@ -99,19 +87,19 @@ function createGalleryLayout() {
   }
 
   let cursor = 0
-  const items = IMAGES.map((src, index) => {
+  const items = images.map((entry, index) => {
     const lane = lanes[index]
     const laneStyle = LANE_STYLES[lane]
     const width = laneStyle.height * 0.8
     const gap = 0.42 + seededUnit(index, 9.4) * 0.65
     const overlap = 0.08 + seededUnit(index, 7.7) * 0.16
     const item = {
-      src,
+      src: entry.image,
       textureIndex: index,
       lane,
       width,
       height: laneStyle.height,
-      x: cursor + width / 2,
+      x: GALLERY_START_X + cursor + width / 2,
       y: laneStyle.y + (seededUnit(index, 11.2) - 0.5) * 0.18,
       z: laneStyle.z,
     }
@@ -125,12 +113,20 @@ function createGalleryLayout() {
 
 // Render the photographs as flat Three.js meshes (3D rectangles).
 // This component also handles hover movement, selection, and focus animation.
-function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focusPointRef }) {
+function GalleryPlanes({
+  images,
+  layout,
+  selectedKey,
+  setSelectedKey,
+  onFocusPlane,
+  focusPointRef,
+  reducedMotion,
+}) {
   const gl = useThree((state) => state.gl)
-  // useMemo saves calculated values so React does not recreate them on every render.
+  // Astro reads this list from the CMS-managed gallery.json file.
   const textureUrls = useMemo(
-    () => IMAGES.map((src) => encodeURI(src.replace('/images/', '/images-webgl/'))),
-    [],
+    () => images.map((entry) => encodeURI(entry.image)),
+    [images],
   )
   const textures = useLoader(THREE.TextureLoader, textureUrls)
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
@@ -208,7 +204,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
         const focusDistance = instance.height / (2 * Math.tan(cameraFov / 2) * 0.88)
         targetY = 0
         targetZ = camera.position.z - focusDistance
-      } else if (!selected && instance.key === hoveredKeyRef.current) {
+      } else if (!reducedMotion && !selected && instance.key === hoveredKeyRef.current) {
         // Nudge a hovered photo forward so it feels interactive.
         targetZ += 0.45
       } else if (selected) {
@@ -231,10 +227,15 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
         Math.abs(mesh.position.z - targetZ),
       )
 
-      // `damp` moves toward the target gradually, producing a smooth animation.
-      mesh.position.x = THREE.MathUtils.damp(mesh.position.x, targetX, 7, delta)
-      mesh.position.y = THREE.MathUtils.damp(mesh.position.y, targetY, 7, delta)
-      mesh.position.z = THREE.MathUtils.damp(mesh.position.z, targetZ, 7, delta)
+      if (reducedMotion) {
+        // Accessibility mode moves directly to the destination without tweening.
+        mesh.position.set(targetX, targetY, targetZ)
+      } else {
+        // `damp` moves toward the target gradually, producing a smooth animation.
+        mesh.position.x = THREE.MathUtils.damp(mesh.position.x, targetX, 7, delta)
+        mesh.position.y = THREE.MathUtils.damp(mesh.position.y, targetY, 7, delta)
+        mesh.position.z = THREE.MathUtils.damp(mesh.position.z, targetZ, 7, delta)
+      }
 
       if (selected && instance.textureIndex === selectedKey) {
         const cameraDistance = Math.abs(mesh.position.x - camera.position.x)
@@ -299,12 +300,19 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
 }
 
 // Keep the Three.js camera synchronized with the horizontal page scroll.
-function CameraRig({ layout, motionRef }) {
+function CameraRig({ layout, motionRef, reducedMotion }) {
   const dollyRef = useRef(0)
 
   useFrame(({ camera }, delta) => {
     const { scroll, limit, velocity } = motionRef.current
     const progress = limit > 0 ? loopOffset(scroll, limit) / limit : 0
+
+    if (reducedMotion) {
+      camera.position.x = progress * layout.cycleWidth
+      camera.position.z = CAMERA_Z
+      return
+    }
+
     const targetDolly = Math.min(Math.abs(velocity) * 0.55, 1)
     const damping = targetDolly > dollyRef.current ? 9 : 3.25
 
@@ -318,7 +326,7 @@ function CameraRig({ layout, motionRef }) {
 }
 
 // Blur photographs that are outside the current focus distance.
-function GalleryDepthOfField({ selectedKey, focusPointRef }) {
+function GalleryDepthOfField({ selectedKey, focusPointRef, reducedMotion }) {
   const effectRef = useRef(null)
   const focusDistanceRef = useRef(CAMERA_Z - LANE_STYLES[3].z)
   const nearBlurConfiguredRef = useRef(false)
@@ -343,12 +351,9 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
 
     effect.target = null
     const targetDistance = camera.position.z - LANE_STYLES[3].z
-    focusDistanceRef.current = THREE.MathUtils.damp(
-      focusDistanceRef.current,
-      targetDistance,
-      6,
-      delta,
-    )
+    focusDistanceRef.current = reducedMotion
+      ? targetDistance
+      : THREE.MathUtils.damp(focusDistanceRef.current, targetDistance, 6, delta)
 
     effect.cocMaterial.focusDistance = focusDistanceRef.current
   })
@@ -367,10 +372,68 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
 }
 
 // Set up the React Three Fiber canvas and connect all 3D gallery pieces.
-function WebGLGallery({ motionRef }) {
-  const layout = useMemo(() => createGalleryLayout(), [])
+function WebGLGallery({
+  images,
+  randomizePhotoOrder,
+  motionRef,
+  onCaptionChange,
+  reducedMotion,
+}) {
+  // Shuffle once when the gallery loads. Turning the CMS setting off uses the
+  // exact order stored in gallery.json again.
+  const displayImages = useMemo(
+    () => (randomizePhotoOrder ? shuffleImages(images) : images),
+    [images, randomizePhotoOrder],
+  )
+  const layout = useMemo(() => createGalleryLayout(displayImages), [displayImages])
   const [selectedKey, setSelectedKey] = useState(null)
   const focusPointRef = useRef(new THREE.Vector3(0, 0, LANE_STYLES[3].z))
+
+  useEffect(() => {
+    // Give the surrounding HTML scroll area a way to close the selected mesh.
+    motionRef.current.clearSelection = () => setSelectedKey(null)
+
+    return () => {
+      motionRef.current.clearSelection = null
+    }
+  }, [motionRef])
+
+  useEffect(() => {
+    const caption = selectedKey === null
+      ? ''
+      : displayImages[selectedKey]?.caption?.trim() ?? ''
+
+    onCaptionChange(caption)
+  }, [displayImages, onCaptionChange, selectedKey])
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        if (selectedKey !== null) {
+          event.preventDefault()
+          setSelectedKey(null)
+        }
+        return
+      }
+
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+      if (displayImages.length === 0) return
+
+      event.preventDefault()
+      const direction = event.key === 'ArrowRight' ? 1 : -1
+      const startingIndex = selectedKey ?? (direction > 0 ? -1 : 0)
+      const nextIndex = (
+        startingIndex + direction + displayImages.length
+      ) % displayImages.length
+
+      setSelectedKey(nextIndex)
+      const nextItem = layout.items[nextIndex]
+      motionRef.current.focusPlane?.(nextItem.x, layout.cycleWidth)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [displayImages.length, layout, motionRef, selectedKey])
 
   return (
     <Canvas
@@ -381,28 +444,42 @@ function WebGLGallery({ motionRef }) {
       // Clicking empty space closes the currently selected photograph.
       onPointerMissed={() => setSelectedKey(null)}
     >
-      <CameraRig layout={layout} motionRef={motionRef} />
+      <CameraRig layout={layout} motionRef={motionRef} reducedMotion={reducedMotion} />
       <Suspense fallback={null}>
         <GalleryPlanes
+          images={displayImages}
           layout={layout}
           selectedKey={selectedKey}
           setSelectedKey={setSelectedKey}
           onFocusPlane={(worldX, cycleWidth) => motionRef.current.focusPlane?.(worldX, cycleWidth)}
           focusPointRef={focusPointRef}
+          reducedMotion={reducedMotion}
         />
       </Suspense>
-      <GalleryDepthOfField selectedKey={selectedKey} focusPointRef={focusPointRef} />
+      <GalleryDepthOfField
+        selectedKey={selectedKey}
+        focusPointRef={focusPointRef}
+        reducedMotion={reducedMotion}
+      />
     </Canvas>
   )
 }
 
 // This is the main page component. It combines the regular HTML header and
 // text with the WebGL gallery, then connects scrolling to the 3D camera.
-export default function Scene() {
+export default function Scene({ images, randomizePhotoOrder }) {
   // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
   const contentRef = useRef(null)
-  const motionRef = useRef({ scroll: 0, limit: 1, velocity: 0, focusPlane: null })
+  const motionRef = useRef({
+    scroll: 0,
+    limit: 1,
+    velocity: 0,
+    focusPlane: null,
+    clearSelection: null,
+  })
+  const [activeCaption, setActiveCaption] = useState('')
+  const reducedMotion = usePrefersReducedMotion()
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -415,12 +492,18 @@ export default function Scene() {
       content,
       orientation: 'horizontal',
       gestureOrientation: 'both',
-      smoothWheel: true,
-      syncTouch: true,
+      smoothWheel: !reducedMotion,
+      syncTouch: !reducedMotion,
       infinite: true,
-      lerp: 0.045,
+      lerp: reducedMotion ? 1 : 0.045,
       wheelMultiplier: 0.25,
     })
+
+    // Close an open photograph as soon as the visitor starts scrolling. These
+    // input events do not run for the automatic scroll used to center a photo.
+    const clearSelection = () => motionRef.current.clearSelection?.()
+    wrapper.addEventListener('wheel', clearSelection, { passive: true })
+    wrapper.addEventListener('touchmove', clearSelection, { passive: true })
 
     const updateMotion = () => {
       // Share Lenis values with the 3D animation loop through `motionRef`.
@@ -433,7 +516,8 @@ export default function Scene() {
       // Convert a photograph's 3D x position into the matching scroll position.
       const targetProgress = loopOffset(worldX, cycleWidth) / cycleWidth
       lenis.scrollTo(targetProgress * lenis.limit, {
-        duration: 1.1,
+        duration: reducedMotion ? 0 : 1.1,
+        immediate: reducedMotion,
         easing: (progress) => 1 - Math.pow(1 - progress, 4),
       })
     }
@@ -453,10 +537,12 @@ export default function Scene() {
     // Stop animation work if this page is ever removed from the screen.
     return () => {
       cancelAnimationFrame(rafId)
+      wrapper.removeEventListener('wheel', clearSelection)
+      wrapper.removeEventListener('touchmove', clearSelection)
       motionRef.current.focusPlane = null
       lenis.destroy()
     }
-  }, [])
+  }, [reducedMotion])
 
   return (
     <main className="studio-shell">
@@ -465,7 +551,7 @@ export default function Scene() {
       <h1 className="brand-signature">ADRIAN GAUT</h1>
       {/* Standard HTML links sit above the 3D canvas and remain easy to use. */}
       <nav className="header-links" aria-label="Contact and social links">
-        <a className="contact-link" href="mailto:adrian@agaut.com">
+        <a className="contact-link" href="/contact">
           Contact
         </a>
         <a
@@ -482,6 +568,13 @@ export default function Scene() {
           </svg>
         </a>
       </nav>
+      {/* Captions only become visible while a captioned photograph is open. */}
+      <p
+        className={`project-caption${activeCaption ? ' is-visible' : ''}`}
+        aria-live="polite"
+      >
+        {activeCaption}
+      </p>
       {/* Lenis watches this wrapper and moves through the extra-wide content. */}
       <div className="scroll-wrapper" ref={wrapperRef}>
         <section className="scroll-content" ref={contentRef}>
@@ -490,7 +583,13 @@ export default function Scene() {
               <p className="kicker">places spaces &amp; things</p>
             </div>
 
-            <WebGLGallery motionRef={motionRef} />
+            <WebGLGallery
+              images={images}
+              randomizePhotoOrder={randomizePhotoOrder}
+              motionRef={motionRef}
+              onCaptionChange={setActiveCaption}
+              reducedMotion={reducedMotion}
+            />
           </div>
         </section>
       </div>

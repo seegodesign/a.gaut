@@ -29,8 +29,12 @@ body {
   /* The custom gallery handles scrolling, so hide the browser's page overflow. */
   overflow: hidden;
   background:
-    radial-gradient(circle at 15% 10%, #ffffff 0%, #f8f8f6 35%, #f2f2ef 100%),
-    linear-gradient(170deg, rgba(255, 255, 255, 0.9), rgba(244, 244, 241, 0.95));
+    /* Soft overhead light, similar to diffused lighting on a gallery wall. */
+    radial-gradient(ellipse 85% 55% at 50% -8%, rgba(255, 255, 255, 0.98), transparent 72%),
+    /* A restrained vignette keeps the wall from looking digitally flat. */
+    radial-gradient(ellipse 120% 100% at 50% 38%, transparent 58%, rgba(207, 204, 194, 0.16) 100%),
+    /* Warm white paint with a barely visible darkening toward the floor. */
+    linear-gradient(180deg, #fafaf8 0%, #f7f7f4 58%, #c6c5bb 100%);
 }
 
 /* The page shell is the positioning area for every full-screen layer. */
@@ -80,12 +84,13 @@ body {
 
 .contact-link {
   font-family: 'futura-pt', 'Futura PT', 'Avenir Next', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 500;
   letter-spacing: 0.16em;
-  line-height: 2rem;
-  text-decoration: none;
+  line-height: 1.2rem;
   text-transform: uppercase;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
 }
 
 .instagram-link {
@@ -112,13 +117,11 @@ body {
   pointer-events: none;
 }
 
-/* Give mouse and keyboard users the same visible interaction feedback. */
-.contact-link:hover,
+/* Keep text still on hover; only keyboard focus and the icon receive feedback. */
 .contact-link:focus-visible,
 .instagram-link:hover,
 .instagram-link:focus-visible {
   opacity: 1;
-  transform: translateY(-2px);
 }
 
 .contact-link:focus-visible,
@@ -139,6 +142,78 @@ body {
 .instagram-link .instagram-dot {
   fill: currentColor;
   stroke: none;
+}
+
+/* Reveal the selected project's optional CMS caption near the lower edge. */
+.project-caption {
+  position: absolute;
+  bottom: clamp(0.65rem, 1.4vw, 1.25rem);
+  left: 50%;
+  z-index: 20;
+  max-width: min(34rem, calc(100vw - 2.5rem));
+  margin: 0;
+  color: #0a0a0d;
+  font-size: clamp(0.72rem, 1vw, 0.88rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  opacity: 0;
+  pointer-events: none;
+  text-align: center;
+  transform: translate(-50%, 0.35rem);
+  transition: opacity 280ms ease, transform 280ms ease;
+}
+
+.project-caption.is-visible {
+  opacity: 0.76;
+  transform: translate(-50%, 0);
+}
+
+/* The contact page uses the same quiet, full-screen presentation as the gallery. */
+.contact-page {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: clamp(1.25rem, 2.5vw, 2.5rem);
+}
+
+/* This version of the name is a link that returns visitors to the gallery. */
+.contact-brand {
+  pointer-events: auto;
+  text-decoration: none;
+}
+
+.contact-copy {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.contact-copy p {
+  margin: 0;
+}
+
+.contact-copy a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+}
+
+.contact-copy a:focus-visible,
+.contact-brand:focus-visible {
+  opacity: 0.58;
+}
+
+.contact-copy a:focus-visible,
+.contact-brand:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 0.35rem;
 }
 
 /* This is the real scrollable element controlled by Lenis. */
@@ -193,8 +268,8 @@ body {
 }
 
 .kicker {
-  margin: 0 0 4rem;
-  letter-spacing: 0.42em;
+  margin: 0 0 12rem;
+  letter-spacing: 0.2em;
   font-size: clamp(0.62rem, 0.94vw, 0.9rem);
   font-weight: 500;
   opacity: 0.56;
@@ -222,4 +297,18 @@ body {
     font-size: clamp(5rem, 34vw, 12rem);
   }
 
+}
+
+/* Respect the operating system's accessibility preference for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .contact-link,
+  .instagram-link,
+  .project-caption {
+    transition: none;
+  }
+
+  .project-caption,
+  .project-caption.is-visible {
+    transform: translate(-50%, 0);
+  }
 }

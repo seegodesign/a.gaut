@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#f8f8f6" />
+  <!-- A geometric, Futura-style capital A drawn as paths for consistent rendering. -->
+  <path d="M32 8 57 56H46.5l-6.2-12.5H23.7L17.5 56H7L32 8Zm0 15.8-4.4 10.8h8.8L32 23.8Z" fill="#0a0a0d" />
+</svg>

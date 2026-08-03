@@ -1,0 +1,59 @@
+# yaml-language-server: $schema=https://unpkg.com/@sveltia/cms/schema/sveltia-cms.json
+
+# Sveltia uses the GitHub repository to load and save CMS-managed content.
+backend:
+  name: github
+  repo: seegodesign/a.gaut
+  branch: main
+
+# New uploads are committed here and served by Astro from `/uploads/...`.
+media_folder: /public/uploads
+public_folder: /uploads
+
+media_libraries:
+  default:
+    config:
+      slugify_filename: true
+
+collections:
+  - name: site_content
+    label: Site Content
+    icon: photo_library
+    files:
+      - name: settings
+        label: Site Settings
+        file: /src/content/settings.json
+        format: json
+        fields:
+          - name: randomizePhotoOrder
+            label: Randomize Photo Order
+            widget: boolean
+            default: false
+            required: false
+            hint: Ignore the curated gallery order and shuffle the photos whenever the site loads.
+          - name: socialImage
+            label: Social Share Image
+            widget: image
+            required: false
+            hint: Optional image used when the site is shared. A 1200 × 630 JPG or PNG works best.
+      - name: gallery
+        label: Gallery
+        file: /src/content/gallery.json
+        format: json
+        fields:
+          - name: images
+            label: Gallery Images
+            label_singular: Image
+            widget: list
+            min: 1
+            collapsed: true
+            thumbnail: image
+            fields:
+              - name: image
+                label: Image
+                widget: image
+              - name: caption
+                label: Project Caption
+                widget: string
+                required: false
+                hint: Optional text shown near the bottom edge when this image is opened.

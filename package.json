@@ -1,25 +1,24 @@
 {
-  "name": "r3f-gsap-template",
+  "name": "a-gaut-portfolio",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/react": "latest",
     "@react-three/drei": "latest",
     "@react-three/fiber": "latest",
     "@react-three/postprocessing": "^3.0.4",
+    "astro": "latest",
     "gsap": "latest",
     "lenis": "^1.3.25",
     "react": "latest",
     "react-dom": "latest",
     "three": "latest"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "latest",
-    "vite": "latest"
   }
 }

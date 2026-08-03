@@ -1,0 +1,54 @@
+---
+import { ClientRouter, fade } from 'astro:transitions'
+import settings from '../content/settings.json'
+import '../styles.css'
+
+const title = 'Contact — Adrian Gaut'
+const description = 'Contact photographer Adrian Gaut and his representation.'
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
+const socialImageUrl = settings.socialImage
+  ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
+  : null
+---
+
+<!doctype html>
+<html lang="en" transition:animate={fade({ duration: '0.35s' })}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f8f8f6" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Adrian Gaut" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    {socialImageUrl && <meta property="og:image" content={socialImageUrl} />}
+    {socialImageUrl && <meta property="og:image:alt" content="Selected work by Adrian Gaut" />}
+    <meta name="twitter:card" content={socialImageUrl ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {socialImageUrl && <meta name="twitter:image" content={socialImageUrl} />}
+    <title>{title}</title>
+    <ClientRouter />
+  </head>
+  <body>
+    <!-- This decorative layer matches the subtle texture on the gallery page. -->
+    <div class="studio-noise" aria-hidden="true"></div>
+
+    <main class="contact-page">
+      <a class="brand-signature contact-brand" href="/" aria-label="Return to the gallery">
+        Adrian Gaut
+      </a>
+
+      <div class="contact-copy">
+        <p>
+          Represented by&nbsp;<a href="http://www.edgereps.com/">EDGE REPS</a>
+        </p>
+        <p><a href="mailto:adrian@agaut.com">adrian@agaut.com</a></p>
+      </div>
+    </main>
+  </body>
+</html>
