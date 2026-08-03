@@ -65,38 +65,6 @@ const LANE_STYLES = {
   3: { height: 6.55, y: -0.35, z: 1.1 },
 }
 
-const vertexShader = /* glsl */ `
-  varying vec2 vUv;
-
-  void main() {
-    vUv = uv;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`
-
-const fragmentShader = /* glsl */ `
-  uniform sampler2D uTexture;
-  varying vec2 vUv;
-
-  float roundedBox(vec2 point, vec2 bounds, float radius) {
-    vec2 q = abs(point) - bounds + radius;
-    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
-  }
-
-  void main() {
-    float edge = 1.0 - smoothstep(
-      0.0,
-      0.008,
-      roundedBox(vUv - 0.5, vec2(0.5), 0.018)
-    );
-
-    if (edge < 0.01) discard;
-
-    vec4 texel = texture2D(uTexture, vUv);
-    gl_FragColor = vec4(texel.rgb, texel.a * edge);
-  }
-`
-
 function loopOffset(value, cycle) {
   if (!cycle) return 0
   return ((value % cycle) + cycle) % cycle
@@ -156,6 +124,7 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
   const textures = useLoader(THREE.TextureLoader, textureUrls)
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
   const meshRefs = useRef(new Map())
+  const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
   const instances = useMemo(
     () => [-1, 0, 1].flatMap((copy) => layout.items.map((item) => ({
@@ -166,14 +135,10 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
     [layout],
   )
   const materials = useMemo(
-    () => textures.map((texture) => new THREE.ShaderMaterial({
-      uniforms: { uTexture: { value: texture } },
-      vertexShader,
-      fragmentShader,
-      transparent: false,
-      alphaToCoverage: true,
-      depthWrite: true,
+    () => textures.map((texture) => new THREE.MeshBasicMaterial({
+      map: texture,
       side: THREE.FrontSide,
+      toneMapped: false,
     })),
     [textures],
   )
@@ -223,6 +188,8 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
         const focusDistance = instance.height / (2 * Math.tan(cameraFov / 2) * 0.88)
         targetY = 0
         targetZ = camera.position.z - focusDistance
+      } else if (!selected && instance.key === hoveredKeyRef.current) {
+        targetZ += 0.45
       } else if (selected) {
         const distance = loopOffset(instance.x - selected.x + layout.cycleWidth / 2, layout.cycleWidth)
           - layout.cycleWidth / 2
@@ -289,9 +256,15 @@ function GalleryPlanes({ layout, selectedKey, setSelectedKey, onFocusPlane, focu
           }}
           onPointerEnter={(event) => {
             event.stopPropagation()
+            hoveredKeyRef.current = item.key
+            focusAnimationActiveRef.current = true
             document.body.style.cursor = 'pointer'
           }}
           onPointerLeave={() => {
+            if (hoveredKeyRef.current === item.key) {
+              hoveredKeyRef.current = null
+              focusAnimationActiveRef.current = true
+            }
             document.body.style.cursor = ''
           }}
         />
@@ -320,13 +293,21 @@ function CameraRig({ layout, motionRef }) {
 function GalleryDepthOfField({ selectedKey, focusPointRef }) {
   const effectRef = useRef(null)
   const focusDistanceRef = useRef(CAMERA_Z - LANE_STYLES[3].z)
+  const nearBlurConfiguredRef = useRef(false)
 
   useFrame(({ camera }, delta) => {
     const effect = effectRef.current
     if (!effect) return
 
+    if (!nearBlurConfiguredRef.current) {
+      effect.bokehNearBasePass.fullscreenMaterial.scale = 0
+      effect.bokehNearFillPass.fullscreenMaterial.scale = 0
+      nearBlurConfiguredRef.current = true
+    }
+
     if (selectedKey !== null) {
       effect.target = focusPointRef.current
+      focusDistanceRef.current = camera.position.distanceTo(focusPointRef.current)
       return
     }
 
@@ -339,7 +320,7 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
       delta,
     )
 
-    effect.focusDistance = focusDistanceRef.current
+    effect.cocMaterial.focusDistance = focusDistanceRef.current
   })
 
   return (
@@ -348,7 +329,7 @@ function GalleryDepthOfField({ selectedKey, focusPointRef }) {
         ref={effectRef}
         focusDistance={focusDistanceRef.current}
         focusRange={8}
-        bokehScale={9.4}
+        bokehScale={2.2}
         resolutionScale={0.5}
       />
     </EffectComposer>
@@ -440,15 +421,34 @@ export default function Scene() {
   return (
     <main className="studio-shell">
       <div className="studio-noise" aria-hidden="true" />
+      <p className="brand-signature">ADRIAN GAUT</p>
+      <nav className="header-links" aria-label="Contact and social links">
+        <a className="contact-link" href="mailto:adrian@agaut.com">
+          Contact
+        </a>
+        <a
+          className="instagram-link"
+          href="https://www.instagram.com/a_gaut"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="Visit a. gaut on Instagram"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="5" />
+            <circle cx="12" cy="12" r="4.25" />
+            <circle className="instagram-dot" cx="17.4" cy="6.7" r="1" />
+          </svg>
+        </a>
+      </nav>
       <div className="scroll-wrapper" ref={wrapperRef}>
         <section className="scroll-content" ref={contentRef}>
           <div className="depth-stage">
-            <WebGLGallery motionRef={motionRef} />
-
-            <div className="editorial-wrap">
+            <div className="name-wrap">
               <p className="kicker">places spaces &amp; things</p>
-              <h1 className="editorial">a. gaut</h1>
+              <h1 className="name">a. gaut</h1>
             </div>
+
+            <WebGLGallery motionRef={motionRef} />
           </div>
         </section>
       </div>
