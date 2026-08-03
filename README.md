@@ -83,8 +83,13 @@ and an image selected with the keyboard is requested immediately.
 - Press `Left Arrow` or `Right Arrow` to move between photographs.
 - Press `Escape` to close the active photograph.
 - Scrolling automatically closes the active photograph.
+- When enabled in Site Settings, auto-scroll advances the gallery until a
+  photograph is opened and resumes after it is closed. Mouse position controls
+  its direction and speed: left reverses, center stops, and right advances. The
+  maximum speed is configurable in Site Settings.
 
-The site respects the operating system's `prefers-reduced-motion` setting.
+The site respects the operating system's `prefers-reduced-motion` setting,
+including disabling automatic scrolling.
 
 ## Project structure
 

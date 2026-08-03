@@ -4,6 +4,8 @@
   "seoTitle": "ADRIAN GAUT",
   "seoDescription": "The photography portfolio of Adrian Gaut.",
   "randomizePhotoOrder": true,
+  "enableAutoScroll": true,
+  "autoScrollSpeed": 15,
   "enablePhotoFloating": false,
   "enableDepthOfField": false,
   "enableScrollMotionBlur": true,

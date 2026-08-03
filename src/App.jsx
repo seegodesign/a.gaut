@@ -6,6 +6,8 @@ export default function App({
   images,
   introDuration,
   randomizePhotoOrder,
+  enableAutoScroll,
+  autoScrollSpeed,
   enablePhotoFloating,
   enableDepthOfField,
   enableScrollMotionBlur,
@@ -15,6 +17,8 @@ export default function App({
       images={images}
       introDuration={introDuration}
       randomizePhotoOrder={randomizePhotoOrder}
+      enableAutoScroll={enableAutoScroll}
+      autoScrollSpeed={autoScrollSpeed}
       enablePhotoFloating={enablePhotoFloating}
       enableDepthOfField={enableDepthOfField}
       enableScrollMotionBlur={enableScrollMotionBlur}

@@ -51,6 +51,22 @@ collections:
             default: false
             required: false
             hint: Ignore the curated gallery order and shuffle the photos whenever the site loads.
+          - name: enableAutoScroll
+            label: Auto-Scroll Gallery
+            widget: boolean
+            default: false
+            required: false
+            hint: Let the mouse position control automatic gallery movement. The left and right sides set direction, and distance from the center sets speed.
+          - name: autoScrollSpeed
+            label: Auto-Scroll Speed
+            widget: number
+            value_type: int
+            default: 48
+            min: 5
+            max: 200
+            step: 1
+            required: false
+            hint: Maximum horizontal speed in pixels per second when the mouse is near either edge. Higher values move the gallery faster.
           - name: enablePhotoFloating
             label: Floating Photo Effect
             widget: boolean

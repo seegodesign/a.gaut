@@ -1,4 +1,12 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { DepthOfField, EffectComposer } from '@react-three/postprocessing'
 import Lenis from 'lenis'
@@ -22,6 +30,13 @@ const DEFAULT_FOCUS_RANGE = 8
 const SELECTED_FOCUS_RANGE = 1.35
 const BACKDROP_OPACITY = 0.9
 const BACKDROP_GAP = 0.08
+const DEFAULT_AUTO_SCROLL_SPEED = 48
+const MIN_AUTO_SCROLL_SPEED = 5
+const MAX_AUTO_SCROLL_SPEED = 200
+const AUTO_SCROLL_MANUAL_PAUSE_MS = 1200
+const PRELOAD_INDICATOR_FAILSAFE_MS = 2500
+const SMOOTH_SCROLL_LERP = 0.045
+const AUTO_SCROLL_POINTER_DEAD_ZONE = 0.08
 // Begin downloading photographs just outside the camera view. This gives the
 // browser time to decode the next few images without requesting the whole CMS
 // library when the page first opens.
@@ -92,6 +107,39 @@ function useCompactViewport() {
   }, [])
 
   return compactViewport
+}
+
+// React Three Fiber normally observes its container, but client-only hydration
+// can initially report a zero-size canvas before Astro's layout has settled.
+// Synchronize once immediately and once on the next frame so texture visibility
+// calculations receive the same valid viewport that a browser resize provides.
+function CanvasSizeSync() {
+  const gl = useThree((state) => state.gl)
+  const setSize = useThree((state) => state.setSize)
+
+  useLayoutEffect(() => {
+    const container = gl.domElement.parentElement
+    if (!container) return undefined
+
+    const syncSize = () => {
+      const bounds = container.getBoundingClientRect()
+      if (bounds.width <= 0 || bounds.height <= 0) return
+
+      setSize(bounds.width, bounds.height, bounds.top, bounds.left)
+    }
+
+    syncSize()
+    const frameId = window.requestAnimationFrame(syncSize)
+    const resizeObserver = new ResizeObserver(syncSize)
+    resizeObserver.observe(container)
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      resizeObserver.disconnect()
+    }
+  }, [gl, setSize])
+
+  return null
 }
 
 // Calculate the lane, size, and 3D position of every gallery image.
@@ -342,6 +390,11 @@ function GalleryPlanes({
       blurDamping,
       delta,
     )
+
+    // Wait for CanvasSizeSync to establish a usable projection. Otherwise an
+    // invalid aspect ratio can create an empty preload range that only a later
+    // browser resize repairs.
+    if (!Number.isFinite(camera.aspect) || camera.aspect <= 0) return
 
     // Work out how wide the view is at the deepest lane, then preload a small
     // strip on either side. All three loop copies share the same texture.
@@ -668,6 +721,15 @@ function WebGLGallery({
   }, [motionRef])
 
   useEffect(() => {
+    // Keep an opened photograph centered instead of moving it automatically.
+    motionRef.current.autoScrollPaused = selectedKey !== null
+
+    return () => {
+      motionRef.current.autoScrollPaused = false
+    }
+  }, [motionRef, selectedKey])
+
+  useEffect(() => {
     const caption = selectedKey === null
       ? ''
       : displayImages[selectedKey]?.caption?.trim() ?? ''
@@ -718,6 +780,7 @@ function WebGLGallery({
       // Clicking empty space closes the currently selected photograph.
       onPointerMissed={() => setSelectedKey(null)}
     >
+      <CanvasSizeSync />
       <CameraRig layout={layout} motionRef={motionRef} reducedMotion={reducedMotion} />
       <Suspense fallback={null}>
         <GalleryPlanes
@@ -756,6 +819,8 @@ export default function Scene({
   images,
   introDuration,
   randomizePhotoOrder,
+  enableAutoScroll = false,
+  autoScrollSpeed = DEFAULT_AUTO_SCROLL_SPEED,
   enablePhotoFloating = true,
   enableDepthOfField = true,
   enableScrollMotionBlur = true,
@@ -769,14 +834,26 @@ export default function Scene({
     velocity: 0,
     focusPlane: null,
     clearSelection: null,
+    autoScrollPaused: false,
   })
   const [activeCaption, setActiveCaption] = useState('')
   const reducedMotion = usePrefersReducedMotion()
   const compactViewport = useCompactViewport()
+  const parsedAutoScrollSpeed = Number(autoScrollSpeed)
+  const resolvedAutoScrollSpeed = Number.isFinite(parsedAutoScrollSpeed)
+    ? THREE.MathUtils.clamp(
+      parsedAutoScrollSpeed,
+      MIN_AUTO_SCROLL_SPEED,
+      MAX_AUTO_SCROLL_SPEED,
+    )
+    : DEFAULT_AUTO_SCROLL_SPEED
   const [introTextComplete, setIntroTextComplete] = useState(reducedMotion)
   const [preloadProgress, setPreloadProgress] = useState(0)
-  const photosCanReveal = reducedMotion || (introTextComplete && preloadProgress >= 1)
-  const visiblePreloadProgress = reducedMotion
+  const [preloadFailsafeReached, setPreloadFailsafeReached] = useState(reducedMotion)
+  // Reveal each decoded photograph after the intro instead of allowing one
+  // stalled request in the initial batch to keep every material transparent.
+  const photosCanReveal = reducedMotion || introTextComplete
+  const visiblePreloadProgress = reducedMotion || preloadFailsafeReached
     ? 1
     : THREE.MathUtils.clamp(preloadProgress, 0, 1)
 
@@ -798,6 +875,21 @@ export default function Scene({
   }, [introDuration, reducedMotion])
 
   useEffect(() => {
+    if (reducedMotion) {
+      setPreloadFailsafeReached(true)
+      return undefined
+    }
+
+    setPreloadFailsafeReached(false)
+    const failsafeTimer = window.setTimeout(
+      () => setPreloadFailsafeReached(true),
+      introDuration + PRELOAD_INDICATOR_FAILSAFE_MS,
+    )
+
+    return () => window.clearTimeout(failsafeTimer)
+  }, [introDuration, reducedMotion])
+
+  useEffect(() => {
     // Astro owns the semantic H1. React only updates its black preload mask.
     document.querySelector('.brand-signature[data-title]')?.style.setProperty(
       '--preload-remainder',
@@ -808,6 +900,23 @@ export default function Scene({
   useEffect(() => () => {
     document.querySelector('.brand-signature[data-title]')
       ?.style.removeProperty('--preload-remainder')
+  }, [])
+
+  useEffect(() => {
+    // The client-only Astro island can hydrate before its fixed-position layers
+    // have final bounds. A one-time resize after two paints makes R3F and Lenis
+    // read those bounds immediately instead of waiting for a real window resize.
+    let measurementRafId = 0
+    const layoutRafId = window.requestAnimationFrame(() => {
+      measurementRafId = window.requestAnimationFrame(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(layoutRafId)
+      window.cancelAnimationFrame(measurementRafId)
+    }
   }, [])
 
   useEffect(() => {
@@ -824,7 +933,7 @@ export default function Scene({
       smoothWheel: !reducedMotion,
       syncTouch: !reducedMotion,
       infinite: true,
-      lerp: reducedMotion ? 1 : 0.045,
+      lerp: reducedMotion ? 1 : SMOOTH_SCROLL_LERP,
       // Phone swipes should move deliberately through the photographs instead
       // of flinging across several images from one short gesture.
       touchMultiplier: compactViewport ? 0.5 : 1,
@@ -832,23 +941,68 @@ export default function Scene({
       wheelMultiplier: 0.25,
     })
 
-    // Close an open photograph as soon as the visitor starts scrolling. These
-    // input events do not run for the automatic scroll used to center a photo.
-    const clearSelection = () => motionRef.current.clearSelection?.()
-    wrapper.addEventListener('wheel', clearSelection, { passive: true })
-    wrapper.addEventListener('touchmove', clearSelection, { passive: true })
+    // Give manual input priority, then resume auto-scroll after its momentum
+    // has settled. These events do not run for programmatic camera centering.
+    let autoScrollResumeAt = 0
+    let pointerScrollFactor = 1
+    const handleManualScroll = () => {
+      motionRef.current.clearSelection?.()
+      autoScrollResumeAt = performance.now() + AUTO_SCROLL_MANUAL_PAUSE_MS
+    }
+    const handlePointerMove = (event) => {
+      if (event.pointerType && event.pointerType !== 'mouse') return
+      if (window.innerWidth <= 0) return
 
+      const normalizedX = THREE.MathUtils.clamp(
+        (event.clientX / window.innerWidth) * 2 - 1,
+        -1,
+        1,
+      )
+      const distanceFromCenter = Math.abs(normalizedX)
+
+      if (distanceFromCenter <= AUTO_SCROLL_POINTER_DEAD_ZONE) {
+        pointerScrollFactor = 0
+        return
+      }
+
+      // A square-root curve makes low CMS speeds perceptible soon after the
+      // pointer leaves center while still reaching the configured edge speed.
+      const scaledDistance = (
+        (distanceFromCenter - AUTO_SCROLL_POINTER_DEAD_ZONE)
+        / (1 - AUTO_SCROLL_POINTER_DEAD_ZONE)
+      )
+      pointerScrollFactor = Math.sign(normalizedX) * Math.sqrt(scaledDistance)
+    }
+    const handlePointerLeave = () => {
+      pointerScrollFactor = 0
+    }
+    wrapper.addEventListener('wheel', handleManualScroll, { passive: true })
+    wrapper.addEventListener('touchmove', handleManualScroll, { passive: true })
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    document.documentElement.addEventListener('mouseleave', handlePointerLeave, { passive: true })
+
+    let autoScrollOffset = 0
+    let autoScrollVelocity = 0
     const updateMotion = () => {
-      // Share Lenis values with the 3D animation loop through `motionRef`.
-      motionRef.current.scroll = typeof lenis.scroll === 'number' ? lenis.scroll : 0
+      // Keep automatic camera travel separate from Lenis's manual momentum.
+      // Combining them here avoids resetting Lenis's animation every frame.
+      const manualScroll = typeof lenis.scroll === 'number' ? lenis.scroll : 0
+      const manualVelocity = Number.isFinite(lenis.velocity) ? lenis.velocity : 0
+      motionRef.current.scroll = manualScroll + autoScrollOffset
       motionRef.current.limit = typeof lenis.limit === 'number' ? lenis.limit : 1
-      motionRef.current.velocity = Number.isFinite(lenis.velocity) ? lenis.velocity : 0
+      motionRef.current.velocity = manualVelocity + autoScrollVelocity
     }
 
     motionRef.current.focusPlane = (worldX, cycleWidth) => {
       // Convert a photograph's 3D x position into the matching scroll position.
+      motionRef.current.autoScrollPaused = true
       const targetProgress = loopOffset(worldX, cycleWidth) / cycleWidth
-      lenis.scrollTo(targetProgress * lenis.limit, {
+      const scrollLimit = lenis.limit > 0 ? lenis.limit : 1
+      const targetScroll = loopOffset(
+        targetProgress * scrollLimit - autoScrollOffset,
+        scrollLimit,
+      )
+      lenis.scrollTo(targetScroll, {
         duration: reducedMotion ? 0 : 1.1,
         immediate: reducedMotion,
         easing: (progress) => 1 - Math.pow(1 - progress, 4),
@@ -857,9 +1011,40 @@ export default function Scene({
 
     lenis.on('scroll', updateMotion)
 
+    // Refresh viewport-relative scroll dimensions after Astro finishes laying
+    // out the hydrated island, matching the recalculation a resize would cause.
+    const layoutSyncFrame = requestAnimationFrame(() => {
+      lenis.resize()
+      updateMotion()
+    })
+
     // requestAnimationFrame asks the browser to update just before each repaint.
     let rafId = 0
+    let previousFrameTime = null
     const raf = (time) => {
+      const deltaSeconds = previousFrameTime === null
+        ? 0
+        : Math.min((time - previousFrameTime) / 1000, 0.05)
+      previousFrameTime = time
+
+      if (
+        enableAutoScroll
+        && !reducedMotion
+        && !motionRef.current.autoScrollPaused
+        && time >= autoScrollResumeAt
+        && lenis.limit > 0
+      ) {
+        // Apply the time-based pointer velocity directly to the camera's scroll
+        // coordinate. Lenis remains free to finish manual momentum smoothly.
+        const autoScrollDelta = resolvedAutoScrollSpeed
+          * pointerScrollFactor
+          * deltaSeconds
+        autoScrollOffset = loopOffset(autoScrollOffset + autoScrollDelta, lenis.limit)
+        autoScrollVelocity = autoScrollDelta
+      } else {
+        autoScrollVelocity = 0
+      }
+
       lenis.raf(time)
       updateMotion()
       rafId = requestAnimationFrame(raf)
@@ -870,12 +1055,15 @@ export default function Scene({
     // Stop animation work if this page is ever removed from the screen.
     return () => {
       cancelAnimationFrame(rafId)
-      wrapper.removeEventListener('wheel', clearSelection)
-      wrapper.removeEventListener('touchmove', clearSelection)
+      cancelAnimationFrame(layoutSyncFrame)
+      wrapper.removeEventListener('wheel', handleManualScroll)
+      wrapper.removeEventListener('touchmove', handleManualScroll)
+      window.removeEventListener('pointermove', handlePointerMove)
+      document.documentElement.removeEventListener('mouseleave', handlePointerLeave)
       motionRef.current.focusPlane = null
       lenis.destroy()
     }
-  }, [compactViewport, reducedMotion])
+  }, [compactViewport, enableAutoScroll, reducedMotion, resolvedAutoScrollSpeed])
 
   return (
     <div className="gallery-runtime">
