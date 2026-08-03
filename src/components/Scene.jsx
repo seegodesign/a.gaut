@@ -221,6 +221,9 @@ function GalleryPlanes({
   const meshRefs = useRef(new Map())
   const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
+  const previousSelectedKeyRef = useRef(null)
+  const selectionRevealRef = useRef({ key: null, brightness: 1 })
+  const departingRevealsRef = useRef(new Map())
   const initialPreloadRef = useRef(null)
   const textureLoader = useMemo(() => new THREE.TextureLoader(), [])
   const scrollBlurUniform = useMemo(() => new THREE.Uniform(0), [])
@@ -293,6 +296,54 @@ function GalleryPlanes({
     depthWrite: false,
     toneMapped: false,
   }), [])
+
+  useLayoutEffect(() => {
+    const previousKey = previousSelectedKeyRef.current
+
+    // A photo selected again while it is still departing should immediately
+    // return to normal ordering before its incoming reveal begins.
+    if (selectedKey !== null && departingRevealsRef.current.has(selectedKey)) {
+      departingRevealsRef.current.delete(selectedKey)
+      materials[selectedKey]?.color.setScalar(1)
+      instances.forEach((instance) => {
+        if (instance.textureIndex === selectedKey) {
+          const mesh = meshRefs.current.get(instance.key)
+          if (mesh) mesh.renderOrder = 0
+        }
+      })
+    }
+
+    if (previousKey !== null && previousKey !== selectedKey) {
+      materials[previousKey]?.color.setScalar(1)
+      departingRevealsRef.current.set(previousKey, { brightness: 1 })
+      // Draw the outgoing photo after the scrim while its brightness fades.
+      // Once it is physically behind the scrim, normal depth ordering resumes.
+      instances.forEach((instance) => {
+        if (instance.textureIndex === previousKey) {
+          const mesh = meshRefs.current.get(instance.key)
+          if (mesh) mesh.renderOrder = 2
+        }
+      })
+    }
+
+    // If another photo was already open, the newly clicked photo was visibly
+    // behind the dark scrim. Match that darkness before the browser paints its
+    // selected state, then let the frame loop reveal it smoothly.
+    if (
+      selectedKey !== null
+      && previousKey !== null
+      && selectedKey !== previousKey
+      && backdropMaterial.opacity > 0.01
+    ) {
+      const brightness = Math.max(0.08, 1 - backdropMaterial.opacity)
+      materials[selectedKey]?.color.setScalar(brightness)
+      selectionRevealRef.current = { key: selectedKey, brightness }
+    } else if (selectedKey === null) {
+      selectionRevealRef.current = { key: null, brightness: 1 }
+    }
+
+    previousSelectedKeyRef.current = selectedKey
+  }, [backdropMaterial, instances, materials, selectedKey])
 
   const reportPreloadProgress = useCallback(() => {
     const plannedTextures = initialPreloadRef.current
@@ -439,6 +490,19 @@ function GalleryPlanes({
       }
     })
 
+    const selectionReveal = selectionRevealRef.current
+    if (selectionReveal.key !== null) {
+      selectionReveal.brightness = reducedMotion
+        ? 1
+        : THREE.MathUtils.damp(selectionReveal.brightness, 1, 5, delta)
+      materials[selectionReveal.key]?.color.setScalar(selectionReveal.brightness)
+
+      if (selectionReveal.brightness > 0.995) {
+        materials[selectionReveal.key]?.color.setScalar(1)
+        selectionRevealRef.current = { key: null, brightness: 1 }
+      }
+    }
+
     // Ambient floating needs continuous frames. When it is disabled, the
     // gallery can stop updating meshes after they return to their resting positions.
     if ((reducedMotion || !enablePhotoFloating)
@@ -560,6 +624,37 @@ function GalleryPlanes({
       backdropMaterial.opacity = reducedMotion
         ? targetOpacity
         : THREE.MathUtils.damp(backdropMaterial.opacity, targetOpacity, 7, delta)
+
+      departingRevealsRef.current.forEach((departure, textureIndex) => {
+        const targetBrightness = selected
+          ? Math.max(0.08, 1 - backdropMaterial.opacity)
+          : 1
+        departure.brightness = reducedMotion
+          ? targetBrightness
+          : THREE.MathUtils.damp(departure.brightness, targetBrightness, 5, delta)
+        materials[textureIndex]?.color.setScalar(departure.brightness)
+
+        const isBehindBackdrop = instances
+          .filter((instance) => instance.textureIndex === textureIndex)
+          .every((instance) => {
+            const mesh = meshRefs.current.get(instance.key)
+            return !mesh || mesh.position.z < backdrop.position.z - 0.001
+          })
+        const transitionComplete = selected
+          ? isBehindBackdrop && Math.abs(departure.brightness - targetBrightness) < 0.005
+          : backdropMaterial.opacity < 0.005
+
+        if (transitionComplete) {
+          materials[textureIndex]?.color.setScalar(1)
+          instances.forEach((instance) => {
+            if (instance.textureIndex === textureIndex) {
+              const mesh = meshRefs.current.get(instance.key)
+              if (mesh) mesh.renderOrder = 0
+            }
+          })
+          departingRevealsRef.current.delete(textureIndex)
+        }
+      })
     }
 
     if (!selected && largestError < 0.001) {
