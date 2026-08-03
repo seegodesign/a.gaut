@@ -184,16 +184,15 @@ function GalleryPlanes({
     }))),
     [layout],
   )
-  // Give every photograph a transparent material immediately. Its texture is
-  // attached only when that photograph approaches the viewport, then faded in.
+  // Use Three.js's opaque dithered reveal instead of transparent blending.
+  // Pixels resolve progressively while every plane keeps correct 3D depth.
   const materials = useMemo(
     () => images.map(() => new THREE.MeshBasicMaterial({
+      alphaHash: true,
       color: '#ffffff',
-      depthWrite: false,
       opacity: 0,
       side: THREE.FrontSide,
       toneMapped: false,
-      transparent: true,
       visible: false,
     })),
     [images],
@@ -288,19 +287,19 @@ function GalleryPlanes({
       }
     })
 
-    // Fade newly decoded photographs in without causing a React render.
+    // Reveal decoded photographs with an opaque screen-door dissolve. Unlike
+    // transparent blending, this cannot turn overlapping planes into glass.
     materials.forEach((material, textureIndex) => {
-      const targetOpacity = textureState.loaded.has(textureIndex) ? 1 : 0
-      material.opacity = reducedMotion
-        ? targetOpacity
-        : THREE.MathUtils.damp(material.opacity, targetOpacity, 8, delta)
+      if (!textureState.loaded.has(textureIndex)) return
 
-      // Once the entrance fade is complete, return to faster, predictable
-      // opaque rendering and allow the photograph to write normal depth.
-      if (targetOpacity === 1 && material.opacity > 0.995 && material.transparent) {
+      material.opacity = reducedMotion
+        ? 1
+        : THREE.MathUtils.damp(material.opacity, 1, 7, delta)
+
+      // Return to the simplest solid material after the short reveal finishes.
+      if (material.opacity > 0.995 && material.alphaHash) {
         material.opacity = 1
-        material.transparent = false
-        material.depthWrite = true
+        material.alphaHash = false
         material.needsUpdate = true
       }
     })
