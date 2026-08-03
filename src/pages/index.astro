@@ -3,14 +3,21 @@ import { ClientRouter, fade } from 'astro:transitions'
 import App from '../App.jsx'
 import gallery from '../content/gallery.json'
 import settings from '../content/settings.json'
+import { getOptimizedUploadPath } from '../lib/imagePaths.js'
 import '../styles.css'
 
-const title = 'Adrian Gaut'
+const title = settings.siteTitle || 'Adrian Gaut'
 const description = 'The photography portfolio of Adrian Gaut.'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 const socialImageUrl = settings.socialImage
   ? new URL(settings.socialImage, Astro.site ?? Astro.url.origin)
   : null
+// Replace only the browser-facing gallery URL. Sveltia's JSON continues to
+// point at the original upload, so its media library remains fully editable.
+const optimizedGalleryImages = gallery.images.map((entry) => ({
+  ...entry,
+  image: getOptimizedUploadPath(entry.image),
+}))
 ---
 
 <!doctype html>
@@ -23,7 +30,7 @@ const socialImageUrl = settings.socialImage
     <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Adrian Gaut" />
+    <meta property="og:site_name" content={title} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
@@ -42,7 +49,8 @@ const socialImageUrl = settings.socialImage
       the interactive React and WebGL gallery must run entirely in the browser.
     -->
     <App
-      images={gallery.images}
+      images={optimizedGalleryImages}
+      siteTitle={settings.siteTitle}
       randomizePhotoOrder={settings.randomizePhotoOrder}
       client:only="react"
     />

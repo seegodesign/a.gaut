@@ -3,3 +3,6 @@ dist
 .astro
 .DS_Store
 *.local
+
+# Generated from CMS originals by `npm run optimize:images`.
+public/optimized/

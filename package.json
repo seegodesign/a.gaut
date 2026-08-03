@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "optimize:images": "node scripts/optimize-images.mjs",
+    "predev": "npm run optimize:images",
     "dev": "astro dev",
+    "prebuild": "npm run optimize:images",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
@@ -20,5 +23,8 @@
     "react": "latest",
     "react-dom": "latest",
     "three": "latest"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.3"
   }
 }

@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
-import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { DepthOfField, EffectComposer } from '@react-three/postprocessing'
 import Lenis from 'lenis'
 import * as THREE from 'three'
@@ -12,9 +12,20 @@ const LANE_STYLES = {
   2: { height: 3.75, y: 0.05, z: -1.05 },
   3: { height: 6.55, y: -0.35, z: 1.1 },
 }
+const DEEPEST_LANE_Z = Math.min(...Object.values(LANE_STYLES).map(({ z }) => z))
 // Shift the repeating strip left so its first foreground photo is already
 // visible on the left side when the camera begins at x = 0.
 const GALLERY_START_X = -5.75
+const INACTIVE_DEPTH_OFFSET = 1
+const INACTIVE_SCALE = 1
+const DEFAULT_FOCUS_RANGE = 8
+const SELECTED_FOCUS_RANGE = 1.35
+const BACKDROP_OPACITY = 0.9
+const BACKDROP_GAP = 0.08
+// Begin downloading photographs just outside the camera view. This gives the
+// browser time to decode the next few images without requesting the whole CMS
+// library when the page first opens.
+const TEXTURE_PRELOAD_MARGIN = 7
 
 // Wrap a number back into the range from 0 up to `cycle`.
 // This is what lets the gallery repeat forever instead of reaching an end.
@@ -61,6 +72,26 @@ function usePrefersReducedMotion() {
   }, [])
 
   return reducedMotion
+}
+
+// Use the same breakpoint as the CSS mobile layout. Besides positioning text,
+// this lets the WebGL scene avoid desktop-only rendering costs on small screens.
+function useCompactViewport() {
+  const [compactViewport, setCompactViewport] = useState(() => (
+    typeof window !== 'undefined'
+      ? window.matchMedia('(max-width: 900px)').matches
+      : false
+  ))
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 900px)')
+    const updateViewport = (event) => setCompactViewport(event.matches)
+
+    mediaQuery.addEventListener('change', updateViewport)
+    return () => mediaQuery.removeEventListener('change', updateViewport)
+  }, [])
+
+  return compactViewport
 }
 
 // Calculate the lane, size, and 3D position of every gallery image.
@@ -128,11 +159,21 @@ function GalleryPlanes({
     () => images.map((entry) => encodeURI(entry.image)),
     [images],
   )
-  const textures = useLoader(THREE.TextureLoader, textureUrls)
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
+  const backdropRef = useRef(null)
   const meshRefs = useRef(new Map())
   const hoveredKeyRef = useRef(null)
   const focusAnimationActiveRef = useRef(false)
+  const textureLoader = useMemo(() => new THREE.TextureLoader(), [])
+  // These mutable collections track network requests without re-rendering the
+  // full gallery whenever an individual photograph finishes loading.
+  const textureState = useMemo(() => ({
+    disposed: false,
+    failed: new Set(),
+    loaded: new Set(),
+    loading: new Set(),
+    textures: new Map(),
+  }), [textureUrls])
   // Make three copies of the gallery: one before, one at, and one after the
   // original. Together with infinite scrolling, this hides the loop seam.
   const instances = useMemo(
@@ -143,33 +184,85 @@ function GalleryPlanes({
     }))),
     [layout],
   )
-  // Each image texture gets its own simple, unlit material. An unlit material
-  // displays the photograph's original colors without requiring scene lights.
+  // Give every photograph a transparent material immediately. Its texture is
+  // attached only when that photograph approaches the viewport, then faded in.
   const materials = useMemo(
-    () => textures.map((texture) => new THREE.MeshBasicMaterial({
-      map: texture,
+    () => images.map(() => new THREE.MeshBasicMaterial({
+      color: '#ffffff',
+      depthWrite: false,
+      opacity: 0,
       side: THREE.FrontSide,
       toneMapped: false,
+      transparent: true,
+      visible: false,
     })),
-    [textures],
+    [images],
   )
+  const backdropMaterial = useMemo(() => new THREE.MeshBasicMaterial({
+    color: '#000000',
+    transparent: true,
+    opacity: 0,
+    depthTest: true,
+    depthWrite: false,
+    toneMapped: false,
+  }), [])
 
   useEffect(() => {
-    // Improve texture sharpness when a photo is viewed at an angle.
-    const anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 4)
-    textures.forEach((texture) => {
-      texture.colorSpace = THREE.SRGBColorSpace
-      texture.anisotropy = anisotropy
-      texture.needsUpdate = true
-    })
+    // React may replay effects during development; mark this resource group as
+    // active each time the setup runs so lazy requests continue after replay.
+    textureState.disposed = false
 
     // React runs this cleanup when the gallery is removed. Disposing GPU
     // resources prevents memory leaks during development and navigation.
     return () => {
+      textureState.disposed = true
+      textureState.textures.forEach((texture) => texture.dispose())
       geometry.dispose()
       materials.forEach((material) => material.dispose())
+      backdropMaterial.dispose()
     }
-  }, [geometry, gl, materials, textures])
+  }, [backdropMaterial, geometry, materials, textureState])
+
+  const requestTexture = useCallback((textureIndex) => {
+    if (
+      textureState.disposed
+      || textureState.loaded.has(textureIndex)
+      || textureState.loading.has(textureIndex)
+      || textureState.failed.has(textureIndex)
+    ) return
+
+    textureState.loading.add(textureIndex)
+    textureLoader.load(
+      textureUrls[textureIndex],
+      (texture) => {
+        // A request can finish after a page transition. Dispose it instead of
+        // attaching it to materials that React has already removed.
+        if (textureState.disposed) {
+          texture.dispose()
+          return
+        }
+
+        // Improve texture sharpness when a photo is viewed at an angle.
+        texture.colorSpace = THREE.SRGBColorSpace
+        texture.anisotropy = Math.min(gl.capabilities.getMaxAnisotropy(), 4)
+        texture.needsUpdate = true
+        textureState.loading.delete(textureIndex)
+        textureState.loaded.add(textureIndex)
+        textureState.textures.set(textureIndex, texture)
+
+        const material = materials[textureIndex]
+        material.map = texture
+        material.visible = true
+        material.needsUpdate = true
+      },
+      undefined,
+      () => {
+        // Do not retry a missing or invalid CMS image on every animation frame.
+        textureState.loading.delete(textureIndex)
+        textureState.failed.add(textureIndex)
+      },
+    )
+  }, [gl, materials, textureLoader, textureState, textureUrls])
 
   useEffect(() => () => {
     document.body.style.cursor = ''
@@ -177,11 +270,44 @@ function GalleryPlanes({
 
   useEffect(() => {
     focusAnimationActiveRef.current = true
-  }, [selectedKey])
+    if (selectedKey !== null) requestTexture(selectedKey)
+  }, [requestTexture, selectedKey])
 
   // useFrame runs once for every rendered animation frame.
-  useFrame(({ camera }, delta) => {
-    if (selectedKey === null && !focusAnimationActiveRef.current) return
+  useFrame(({ camera, clock }, delta) => {
+    // Work out how wide the view is at the deepest lane, then preload a small
+    // strip on either side. All three loop copies share the same texture.
+    const halfViewportWidth = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+      * (camera.position.z - DEEPEST_LANE_Z)
+      * camera.aspect
+    const loadDistance = halfViewportWidth + TEXTURE_PRELOAD_MARGIN
+
+    instances.forEach((instance) => {
+      if (Math.abs(instance.baseX - camera.position.x) <= loadDistance) {
+        requestTexture(instance.textureIndex)
+      }
+    })
+
+    // Fade newly decoded photographs in without causing a React render.
+    materials.forEach((material, textureIndex) => {
+      const targetOpacity = textureState.loaded.has(textureIndex) ? 1 : 0
+      material.opacity = reducedMotion
+        ? targetOpacity
+        : THREE.MathUtils.damp(material.opacity, targetOpacity, 8, delta)
+
+      // Once the entrance fade is complete, return to faster, predictable
+      // opaque rendering and allow the photograph to write normal depth.
+      if (targetOpacity === 1 && material.opacity > 0.995 && material.transparent) {
+        material.opacity = 1
+        material.transparent = false
+        material.depthWrite = true
+        material.needsUpdate = true
+      }
+    })
+
+    // Ambient floating needs continuous frames. Reduced-motion mode can stop
+    // rendering once every mesh has returned to its resting position.
+    if (reducedMotion && selectedKey === null && !focusAnimationActiveRef.current) return
 
     const selected = selectedKey !== null ? layout.items[selectedKey] : null
     const pushRadius = 10
@@ -197,6 +323,9 @@ function GalleryPlanes({
       let targetX = instance.baseX
       let targetY = instance.y
       let targetZ = instance.z
+      let targetScale = 1
+      let targetRotationY = 0
+      let targetRotationZ = 0
 
       if (selected && instance.textureIndex === selectedKey) {
         // Bring every copy of the chosen photograph toward the camera.
@@ -204,10 +333,21 @@ function GalleryPlanes({
         const focusDistance = instance.height / (2 * Math.tan(cameraFov / 2) * 0.88)
         targetY = 0
         targetZ = camera.position.z - focusDistance
-      } else if (!reducedMotion && !selected && instance.key === hoveredKeyRef.current) {
-        // Nudge a hovered photo forward so it feels interactive.
-        targetZ += 0.45
+      } else if (!reducedMotion && !selected) {
+        // Every photograph drifts gently in place. Hovering adds a little more
+        // lift without changing the shared anti-gravity character.
+        const floatTime = clock.elapsedTime + instance.textureIndex * 0.37
+        const isHovered = instance.key === hoveredKeyRef.current
+        const hoverBoost = isHovered ? 1 : 0
+
+        targetY += Math.sin(floatTime * 0.72) * (0.045 + hoverBoost * 0.1)
+        targetZ += Math.cos(floatTime * 0.61) * (0.025 + hoverBoost * 0.025) + hoverBoost * 0.34
       } else if (selected) {
+        // Recede and shrink every non-selected photograph so the active image
+        // reads as the clear foreground subject.
+        targetZ -= INACTIVE_DEPTH_OFFSET
+        targetScale = INACTIVE_SCALE
+
         // Push nearby photographs aside to create space around the selection.
         const distance = loopOffset(instance.x - selected.x + layout.cycleWidth / 2, layout.cycleWidth)
           - layout.cycleWidth / 2
@@ -225,16 +365,26 @@ function GalleryPlanes({
         Math.abs(mesh.position.x - targetX),
         Math.abs(mesh.position.y - targetY),
         Math.abs(mesh.position.z - targetZ),
+        Math.abs(mesh.scale.x - instance.width * targetScale),
+        Math.abs(mesh.scale.y - instance.height * targetScale),
+        Math.abs(mesh.rotation.y - targetRotationY),
+        Math.abs(mesh.rotation.z - targetRotationZ),
       )
 
       if (reducedMotion) {
         // Accessibility mode moves directly to the destination without tweening.
         mesh.position.set(targetX, targetY, targetZ)
+        mesh.scale.set(instance.width * targetScale, instance.height * targetScale, 1)
+        mesh.rotation.set(0, targetRotationY, targetRotationZ)
       } else {
         // `damp` moves toward the target gradually, producing a smooth animation.
         mesh.position.x = THREE.MathUtils.damp(mesh.position.x, targetX, 7, delta)
         mesh.position.y = THREE.MathUtils.damp(mesh.position.y, targetY, 7, delta)
         mesh.position.z = THREE.MathUtils.damp(mesh.position.z, targetZ, 7, delta)
+        mesh.scale.x = THREE.MathUtils.damp(mesh.scale.x, instance.width * targetScale, 7, delta)
+        mesh.scale.y = THREE.MathUtils.damp(mesh.scale.y, instance.height * targetScale, 7, delta)
+        mesh.rotation.y = THREE.MathUtils.damp(mesh.rotation.y, targetRotationY, 5, delta)
+        mesh.rotation.z = THREE.MathUtils.damp(mesh.rotation.z, targetRotationZ, 5, delta)
       }
 
       if (selected && instance.textureIndex === selectedKey) {
@@ -250,6 +400,32 @@ function GalleryPlanes({
       focusPointRef.current.copy(closestFocusedMesh.position)
     }
 
+    const backdrop = backdropRef.current
+    if (backdrop) {
+      const targetOpacity = selected && closestFocusedMesh ? BACKDROP_OPACITY : 0
+
+      if (selected && closestFocusedMesh) {
+        const backdropZ = closestFocusedMesh.position.z - BACKDROP_GAP
+        const cameraDistance = camera.position.z - backdropZ
+        const viewportHeight = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)
+          * cameraDistance
+        const viewportWidth = viewportHeight * camera.aspect
+
+        // Follow the camera and slightly overscan so the plane always fills
+        // the full screen, even while the image is moving into position.
+        backdrop.position.set(camera.position.x, camera.position.y, backdropZ)
+        backdrop.scale.set(viewportWidth * 1.04, viewportHeight * 1.04, 1)
+      }
+
+      largestError = Math.max(
+        largestError,
+        Math.abs(backdropMaterial.opacity - targetOpacity),
+      )
+      backdropMaterial.opacity = reducedMotion
+        ? targetOpacity
+        : THREE.MathUtils.damp(backdropMaterial.opacity, targetOpacity, 7, delta)
+    }
+
     if (!selected && largestError < 0.001) {
       focusAnimationActiveRef.current = false
     }
@@ -257,6 +433,16 @@ function GalleryPlanes({
 
   return (
     <group dispose={null}>
+      {/* This screen-sized scrim sits behind the active photo but in front of
+          every receded photo, so depth testing leaves only the active one bright. */}
+      <mesh
+        ref={backdropRef}
+        geometry={geometry}
+        material={backdropMaterial}
+        position={[0, 0, -20]}
+        raycast={() => null}
+        renderOrder={1}
+      />
       {/* Turn each calculated gallery item into a clickable 3D mesh. */}
       {instances.map((item) => (
         <mesh
@@ -342,6 +528,15 @@ function GalleryDepthOfField({ selectedKey, focusPointRef, reducedMotion }) {
       nearBlurConfiguredRef.current = true
     }
 
+    // A tighter range makes the background, which also moves farther away,
+    // noticeably blurrier while a photograph is selected.
+    const targetFocusRange = selectedKey !== null
+      ? SELECTED_FOCUS_RANGE
+      : DEFAULT_FOCUS_RANGE
+    effect.cocMaterial.focusRange = reducedMotion
+      ? targetFocusRange
+      : THREE.MathUtils.damp(effect.cocMaterial.focusRange, targetFocusRange, 7, delta)
+
     if (selectedKey !== null) {
       // When an image is open, tell the effect to focus on that exact position.
       effect.target = focusPointRef.current
@@ -363,7 +558,7 @@ function GalleryDepthOfField({ selectedKey, focusPointRef, reducedMotion }) {
       <DepthOfField
         ref={effectRef}
         focusDistance={focusDistanceRef.current}
-        focusRange={8}
+        focusRange={DEFAULT_FOCUS_RANGE}
         bokehScale={2.2}
         resolutionScale={0.5}
       />
@@ -378,6 +573,7 @@ function WebGLGallery({
   motionRef,
   onCaptionChange,
   reducedMotion,
+  compactViewport,
 }) {
   // Shuffle once when the gallery loads. Turning the CMS setting off uses the
   // exact order stored in gallery.json again.
@@ -439,8 +635,13 @@ function WebGLGallery({
     <Canvas
       className="gallery-canvas"
       camera={{ fov: 42, near: 0.1, far: 100, position: [0, 0, CAMERA_Z] }}
-      dpr={[1, 1.25]}
-      gl={{ alpha: true, antialias: true, powerPreference: 'high-performance' }}
+      // A 1× mobile canvas is considerably lighter on high-density phones.
+      dpr={compactViewport ? 1 : [1, 1.25]}
+      gl={{
+        alpha: true,
+        antialias: !compactViewport,
+        powerPreference: 'high-performance',
+      }}
       // Clicking empty space closes the currently selected photograph.
       onPointerMissed={() => setSelectedKey(null)}
     >
@@ -456,18 +657,22 @@ function WebGLGallery({
           reducedMotion={reducedMotion}
         />
       </Suspense>
-      <GalleryDepthOfField
-        selectedKey={selectedKey}
-        focusPointRef={focusPointRef}
-        reducedMotion={reducedMotion}
-      />
+      {/* Depth-of-field is the most expensive postprocessing pass. The mobile
+          composition keeps its natural 3D depth without this desktop effect. */}
+      {!compactViewport && (
+        <GalleryDepthOfField
+          selectedKey={selectedKey}
+          focusPointRef={focusPointRef}
+          reducedMotion={reducedMotion}
+        />
+      )}
     </Canvas>
   )
 }
 
 // This is the main page component. It combines the regular HTML header and
 // text with the WebGL gallery, then connects scrolling to the 3D camera.
-export default function Scene({ images, randomizePhotoOrder }) {
+export default function Scene({ images, siteTitle, randomizePhotoOrder }) {
   // Refs keep mutable values between renders without causing another render.
   const wrapperRef = useRef(null)
   const contentRef = useRef(null)
@@ -480,6 +685,7 @@ export default function Scene({ images, randomizePhotoOrder }) {
   })
   const [activeCaption, setActiveCaption] = useState('')
   const reducedMotion = usePrefersReducedMotion()
+  const compactViewport = useCompactViewport()
 
   useEffect(() => {
     const wrapper = wrapperRef.current
@@ -548,7 +754,7 @@ export default function Scene({ images, randomizePhotoOrder }) {
     <main className="studio-shell">
       {/* Decorative texture; aria-hidden keeps it out of screen readers. */}
       <div className="studio-noise" aria-hidden="true" />
-      <h1 className="brand-signature">ADRIAN GAUT</h1>
+      <h1 className="brand-signature">{siteTitle}</h1>
       {/* Standard HTML links sit above the 3D canvas and remain easy to use. */}
       <nav className="header-links" aria-label="Contact and social links">
         <a className="contact-link" href="/contact">
@@ -589,6 +795,7 @@ export default function Scene({ images, randomizePhotoOrder }) {
               motionRef={motionRef}
               onCaptionChange={setActiveCaption}
               reducedMotion={reducedMotion}
+              compactViewport={compactViewport}
             />
           </div>
         </section>

@@ -3,7 +3,8 @@ import { ClientRouter, fade } from 'astro:transitions'
 import settings from '../content/settings.json'
 import '../styles.css'
 
-const title = 'Contact — Adrian Gaut'
+const siteTitle = settings.siteTitle || 'Adrian Gaut'
+const title = `Contact — ${siteTitle}`
 const description = 'Contact photographer Adrian Gaut and his representation.'
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin)
 const socialImageUrl = settings.socialImage
@@ -21,7 +22,7 @@ const socialImageUrl = settings.socialImage
     <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Adrian Gaut" />
+    <meta property="og:site_name" content={siteTitle} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonicalUrl} />
@@ -40,7 +41,7 @@ const socialImageUrl = settings.socialImage
 
     <main class="contact-page">
       <a class="brand-signature contact-brand" href="/" aria-label="Return to the gallery">
-        Adrian Gaut
+        {siteTitle}
       </a>
 
       <div class="contact-copy">

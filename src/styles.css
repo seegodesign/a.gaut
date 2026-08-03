@@ -9,6 +9,9 @@
   --studio-bg: #f8f8f6;
   --studio-shadow: rgba(20, 20, 20, 0.16);
   --studio-shadow-soft: rgba(20, 20, 20, 0.08);
+  --page-gutter: clamp(1.25rem, 2.5vw, 2.5rem);
+  --header-control-size: 2rem;
+  --header-icon-size: 1.55rem;
 }
 
 /* Include padding and borders inside an element's declared width and height. */
@@ -42,6 +45,7 @@ body {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 100dvh;
   isolation: isolate;
 }
 
@@ -66,10 +70,12 @@ body {
 /* Keep the contact and Instagram links together in the top-right corner. */
 .header-links {
   position: absolute;
-  top: clamp(1.25rem, 2.5vw, 2.5rem);
-  right: clamp(1.25rem, 2.5vw, 2.5rem);
+  top: calc(var(--page-gutter) + env(safe-area-inset-top, 0px));
+  right: calc(var(--page-gutter) + env(safe-area-inset-right, 0px));
   z-index: 20;
   display: flex;
+  width: max-content;
+  height: var(--header-control-size);
   align-items: center;
   gap: 1rem;
 }
@@ -95,22 +101,28 @@ body {
 
 .instagram-link {
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: var(--header-control-size);
+  height: var(--header-control-size);
   place-items: center;
 }
 
 /* The photographer's name stays fixed in the top-left corner. */
 .brand-signature {
   position: absolute;
-  top: clamp(1.25rem, 2.5vw, 2.5rem);
-  left: clamp(1.25rem, 2.5vw, 2.5rem);
+  top: calc(var(--page-gutter) + env(safe-area-inset-top, 0px));
+  left: calc(var(--page-gutter) + env(safe-area-inset-left, 0px));
   z-index: 20;
+  display: flex;
+  height: var(--header-control-size);
+  align-items: center;
+  /* Match the title's visible gutter to the icon inside its larger tap area. */
+  padding-left: calc((var(--header-control-size) - var(--header-icon-size)) / 2);
   margin: 0;
   color: #0a0a0d;
   font-family: 'futura-pt', 'Futura PT', 'Avenir Next', sans-serif;
   font-size: clamp(0.72rem, 2vw, 10rem);
   font-weight: 700;
+  line-height: 1;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   opacity: 0.84;
@@ -132,8 +144,8 @@ body {
 
 /* Draw the Instagram logo using the lines in its inline SVG. */
 .instagram-link svg {
-  width: 1.55rem;
-  height: 1.55rem;
+  width: var(--header-icon-size);
+  height: var(--header-icon-size);
   fill: none;
   stroke: currentColor;
   stroke-width: 1.5;
@@ -149,17 +161,17 @@ body {
   position: absolute;
   bottom: clamp(0.65rem, 1.4vw, 1.25rem);
   left: 50%;
-  z-index: 20;
+  z-index: 30;
   max-width: min(34rem, calc(100vw - 2.5rem));
   margin: 0;
-  color: #0a0a0d;
+  color: #fff;
   font-size: clamp(0.72rem, 1vw, 0.88rem);
-  font-weight: 500;
   letter-spacing: 0.08em;
   line-height: 1.5;
   opacity: 0;
   pointer-events: none;
   text-align: center;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
   transform: translate(-50%, 0.35rem);
   transition: opacity 280ms ease, transform 280ms ease;
 }
@@ -175,7 +187,7 @@ body {
   z-index: 10;
   display: grid;
   width: 100%;
-  height: 100%;
+  min-height: 100dvh;
   place-items: center;
   padding: clamp(1.25rem, 2.5vw, 2.5rem);
 }
@@ -222,6 +234,7 @@ body {
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
+  overscroll-behavior: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -243,6 +256,7 @@ body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -260,15 +274,16 @@ body {
   position: absolute;
   inset: 0;
   z-index: 0;
-  display: grid;
-  align-content: flex-end;
-  justify-items: center;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 var(--page-gutter) clamp(3rem, 11vh, 7rem);
   pointer-events: none;
   text-transform: lowercase;
 }
 
 .kicker {
-  margin: 0 0 12rem;
+  margin: 0;
   letter-spacing: 0.2em;
   font-size: clamp(0.62rem, 0.94vw, 0.9rem);
   font-weight: 500;
@@ -289,14 +304,41 @@ body {
 
 /* On narrow screens, add more scroll distance for comfortable touch movement. */
 @media (max-width: 900px) {
+  :root {
+    --page-gutter: 1rem;
+    --header-control-size: 2.75rem;
+    --header-icon-size: 1.4rem;
+  }
+
   .scroll-content {
     width: 880vw;
   }
 
-  .name {
-    font-size: clamp(5rem, 34vw, 12rem);
+  .header-links {
+    gap: 0.55rem;
   }
 
+  .contact-link {
+    font-size: 0.72rem;
+    letter-spacing: 0.13em;
+  }
+
+  .name-wrap {
+    padding-right: max(var(--page-gutter), env(safe-area-inset-right));
+    padding-bottom: max(2.25rem, calc(env(safe-area-inset-bottom) + 1.25rem));
+    padding-left: max(var(--page-gutter), env(safe-area-inset-left));
+  }
+
+  .kicker {
+    font-size: 0.64rem;
+    letter-spacing: 0.16em;
+    text-align: center;
+  }
+
+  .project-caption {
+    bottom: max(0.75rem, calc(env(safe-area-inset-bottom) + 0.5rem));
+    max-width: calc(100vw - 2rem);
+  }
 }
 
 /* Respect the operating system's accessibility preference for less motion. */

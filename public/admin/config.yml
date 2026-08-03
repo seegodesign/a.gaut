@@ -25,6 +25,11 @@ collections:
         file: /src/content/settings.json
         format: json
         fields:
+          - name: siteTitle
+            label: Site Title
+            widget: string
+            required: true
+            hint: The title of the site, shown in the browser tab and search results.
           - name: randomizePhotoOrder
             label: Randomize Photo Order
             widget: boolean
