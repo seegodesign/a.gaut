@@ -34,7 +34,7 @@ const optimizedGalleryImages = gallery.images.map((entry) => ({
   image: getOptimizedUploadPath(entry.image),
 }))
 const instagramUrl = site.instagramUrl?.trim() || 'https://www.instagram.com/a_gaut'
-const subhead = site.subhead?.trim() || 'places spaces & things'
+const subhead = site.subhead?.trim()
 // Default to enabled so CMS documents created before this setting retain the
 // existing character reveal.
 const animateSubhead = site.animateSubhead !== false
